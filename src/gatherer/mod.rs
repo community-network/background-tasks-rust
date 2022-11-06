@@ -43,7 +43,69 @@ pub struct RegionResult {
     pub region: String,
     pub amounts: RegionAmounts,
     pub maps: HashMap<String, i64>,
-    pub modes: HashMap<String, i64>
+    pub modes: HashMap<String, i64>,
+    pub settings: HashMap<String, i64>,
+    #[serde(rename = "ownerPlatform")]
+    pub owner_platform: HashMap<String, i64>,
+}
+
+pub async fn global_region_players(region_results: &HashMap<String, RegionResult>) -> anyhow::Result<RegionResult> {
+
+    let mut all_regions = RegionResult { 
+        region: "ALL".to_string(),
+        amounts: RegionAmounts {
+            server_amount: 0,
+            soldier_amount: 0,
+            queue_amount: 0,
+            spectator_amount: 0,
+            dice_server_amount: 0,
+            dice_soldier_amount: 0,
+            dice_queue_amount: 0,
+            dice_spectator_amount: 0,
+            community_server_amount: 0,
+            community_soldier_amount: 0,
+            community_queue_amount: 0,
+            community_spectator_amount: 0,
+        },
+        maps: HashMap::new(),
+        modes: HashMap::new(),
+        settings: HashMap::new(),
+        owner_platform: HashMap::new(),
+    };
+    for region in region_results.values() {
+        all_regions.amounts.server_amount += region.amounts.server_amount;
+        all_regions.amounts.soldier_amount += region.amounts.soldier_amount;
+        all_regions.amounts.queue_amount += region.amounts.queue_amount;
+        all_regions.amounts.spectator_amount += region.amounts.spectator_amount;
+        all_regions.amounts.dice_server_amount += region.amounts.dice_server_amount;
+        all_regions.amounts.dice_soldier_amount += region.amounts.dice_soldier_amount;
+        all_regions.amounts.dice_queue_amount += region.amounts.dice_queue_amount;
+        all_regions.amounts.dice_spectator_amount += region.amounts.dice_spectator_amount;
+        all_regions.amounts.community_server_amount += region.amounts.community_server_amount;
+        all_regions.amounts.community_soldier_amount += region.amounts.community_soldier_amount;
+        all_regions.amounts.community_queue_amount += region.amounts.community_queue_amount;
+        all_regions.amounts.community_spectator_amount += region.amounts.community_spectator_amount;
+
+        for (key, value) in &region.maps {
+            all_regions.maps.entry(key.to_string())
+                .and_modify(|count| *count += value).or_insert(*value);
+        }
+        for (key, value) in &region.modes {
+            all_regions.modes.entry(key.to_string())
+                .and_modify(|count| *count += value).or_insert(*value);
+        }
+        for (key, value) in &region.settings {
+            all_regions.settings.entry(key.to_string())
+                .and_modify(|count| *count += value).or_insert(*value);
+        }
+        for (key, value) in &region.owner_platform {
+            all_regions.owner_platform.entry(key.to_string())
+                .and_modify(|count| *count += value).or_insert(*value);
+        }
+    }
+
+    Ok(all_regions)
+    
 }
 
 pub fn build_data_point(frontend_game_name: &str, data_type: &str, region: &str, platform: &str, field: &str, amount: &i64) -> Result<DataPoint, DataPointError> {

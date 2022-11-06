@@ -145,7 +145,9 @@ async fn server_list_to_sum(found_servers: HashMap<String, BattlelogServer>) -> 
             community_spectator_amount: 0,
         },
         maps: HashMap::new(),
-        modes: HashMap::new()
+        modes: HashMap::new(),
+        settings: todo!(),
+        owner_platform: todo!(),
     };
     
     let mut regions: HashMap<String, super::RegionResult> = HashMap::new();
@@ -172,7 +174,9 @@ async fn server_list_to_sum(found_servers: HashMap<String, BattlelogServer>) -> 
                     community_spectator_amount: 0,
                 },
                 maps: HashMap::new(),
-                modes: HashMap::new()
+                modes: HashMap::new(),
+                settings: todo!(),
+                owner_platform: todo!(),
             }
         });
 

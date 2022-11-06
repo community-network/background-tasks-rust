@@ -75,9 +75,9 @@ async fn main() -> anyhow::Result<()> {
         // for (key, value) in battlelog_games {
         //     battlelog::gather_battlelog(&influx_client, key, value).await?;
         // }
-        match battlefield_grpc::gather_grpc(&influx_client, sessions.get("kingston").unwrap_or(&empty_game_hash).to_owned(), cookie.clone()).await {
-            Ok(_) => todo!(),
-            Err(e) => println!("{:#?}", e),
-        }
+        // match battlefield_grpc::gather_grpc(&influx_client, sessions.get("kingston").unwrap_or(&empty_game_hash).to_owned(), cookie.clone()).await {
+        //     Ok(_) => {},
+        //     Err(e) => println!("{:#?}", e),
+        // }
     }
 }
