@@ -145,6 +145,13 @@ pub async fn push_to_database(influx_client: &influxdb2::Client, frontend_game_n
         for (key, value) in &value.modes {
             points.push(build_data_point(frontend_game_name, "modes", key, platform, key, value)?);
         }
+        for (key, value) in &value.owner_platform {
+            points.push(build_data_point(frontend_game_name, "ownerPlatform", key, platform, key, value)?);
+        }
+        for (key, value) in &value.settings {
+            points.push(build_data_point(frontend_game_name, "settings", key, platform, key, value)?);
+        }
+
         influx_client.write(bucket, stream::iter(points)).await?;
     }
     Ok(())
