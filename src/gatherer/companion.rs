@@ -106,8 +106,8 @@ async fn region_players(region: &str, session: &String, game_name: &str, platfor
         amounts: region_amounts,
         maps: map_amounts,
         modes: mode_amounts,
-        settings: todo!(),
-        owner_platform: todo!(),
+        settings: HashMap::new(),
+        owner_platform: HashMap::new(),
     })
 }
 
