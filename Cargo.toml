@@ -30,3 +30,12 @@ features = ["full"]
 [dependencies.bf_sparta]
 git = "https://github.com/Community-network/sparta-rust"
 branch = "main"
+
+[dependencies.grpc-rust]
+git = "https://github.com/community-network/grpc-rust"
+branch = "main"
+
+[dependencies.reqwest]
+version = "0.11.12"
+default-features = false
+features = ["rustls-tls", "json"]
