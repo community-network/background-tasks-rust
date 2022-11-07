@@ -3,8 +3,6 @@ use futures::future::join_all;
 use crate::structs::companion::{ServerFilter, UnusedValue, Slots, Regions};
 use bf_sparta::sparta_api;
 
-use super::combine_region_players;
-
 async fn region_players(region: &str, session: &String, game_name: &str, platform: &str) -> anyhow::Result<super::RegionResult> {
     let mut filters = ServerFilter {
         version: 6,
@@ -125,19 +123,16 @@ async fn get_region_stats(game_name: &str, old_session: String, cookie: bf_spart
     let result = join_all(tasks).await;
     for item in result {
         match item {
-            Ok(region_result) => platform_result.insert(region_result.clone().region, region_result),
-            Err(e) => log::error!("1 {} region failed!", game_name),
-        }
+            Ok(region_result) => {platform_result.insert(region_result.clone().region, region_result);},
+            Err(e) => {log::error!("1 {} region failed!", game_name);},
+        };
     }
-    let all_regions = match combine_region_players("ALL", &platform_result).await {
-        Ok(result) => result,
-        Err(e) => anyhow::bail!("Couldnt create global info for {}: {:#?}", game_name, e),
-    };
+    let all_regions = super::combine_region_players("ALL", &platform_result).await;
     platform_result.insert("ALL".to_string(), all_regions);
     Ok((session.session_id, platform_result))
 }
 
-pub async fn gather_companion(influx_client: &influxdb2::Client, mut sessions: HashMap<String, String>, cookie: bf_sparta::cookie::Cookie, game_name: &str, frontend_game_name: &str) -> anyhow::Result<(HashMap<String, String>, HashMap<String, HashMap<String, super::RegionResult>>)> {
+pub async fn gather_companion(influx_client: &influxdb2::Client, mut sessions: HashMap<String, String>, cookie: bf_sparta::cookie::Cookie, game_name: &str, frontend_game_name: &str) -> anyhow::Result<(HashMap<String, String>, HashMap<String, super::RegionResult>)> {
     let game_platforms = match &game_name.to_string()[..] {
         "tunguska" => vec!["pc", "ps4", "xboxone"],
         "casablanca" => vec!["pc", "ps4", "xboxone"],
@@ -160,6 +155,12 @@ pub async fn gather_companion(influx_client: &influxdb2::Client, mut sessions: H
         sessions.insert(platform.into(), session);
         game_result.insert(platform.into(), platform_result);
     }
-    
-    Ok((sessions, game_result))
+
+    let combined_platform_regions = super::combine_region_platforms(&game_result).await;
+    match super::push_to_database(influx_client, frontend_game_name, "global", &combined_platform_regions).await {
+        Ok(_) => {},
+        Err(e) => log::error!("{} failed to push to influxdb: {:#?}", game_name, e),
+    };
+
+    Ok((sessions, combined_platform_regions))
 }

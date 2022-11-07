@@ -118,10 +118,7 @@ async fn get_region_stats(kingston_client: &KingstonClient) -> anyhow::Result<Ha
         regions.insert(region.to_string(), region_stats);
     }
 
-    let all_regions = match combine_region_players("ALL", &regions).await {
-        Ok(result) => result,
-        Err(e) => anyhow::bail!("Couldnt create global info for kingston: {:#?}", e),
-    };
+    let all_regions = combine_region_players("ALL", &regions).await;
     regions.insert("ALL".to_string(), all_regions);
     Ok(regions)
 }
@@ -136,7 +133,7 @@ pub async fn gather_grpc(influx_client: &influxdb2::Client, mut sessions: HashMa
         Ok(result) => {
             match super::push_to_database(influx_client, "bf2042portal", "global", &result).await {
                 Ok(_) => {},
-                Err(_) => log::error!("kingston failed to push to influxdb: {:#?}", e),
+                Err(e) => log::error!("kingston failed to push to influxdb: {:#?}", e),
             };
             result
         },
