@@ -118,7 +118,10 @@ async fn get_region_stats(kingston_client: &KingstonClient) -> anyhow::Result<Ha
         regions.insert(region.to_string(), region_stats);
     }
 
-    let all_regions = global_region_players(&regions).await?;
+    let all_regions = match global_region_players(&regions).await {
+        Ok(result) => result,
+        Err(e) => anyhow::bail!("Couldnt create global info for kingston: {:#?}", e),
+    };
     regions.insert("ALL".to_string(), all_regions);
     Ok(regions)
 }
@@ -127,17 +130,17 @@ pub async fn gather_grpc(influx_client: &influxdb2::Client, mut sessions: HashMa
     let mut kingston_client = KingstonClient::new(sessions.get("pc").unwrap_or(&"".to_string()).to_string()).await?;
     match kingston_client.auth(cookie.clone()).await {
         Ok(_) => {},
-        Err(e) => panic!("kingston session failed: {:#?}", e),
+        Err(e) => anyhow::bail!("kingston session failed: {:#?}", e),
     };
     let game_result = match get_region_stats(&kingston_client).await {
         Ok(result) => {
             match super::push_to_database(influx_client, "bf2042portal", "global", &result).await {
                 Ok(_) => {},
-                Err(_) => todo!(),
+                Err(_) => log::error!("kingston failed to push to influxdb: {:#?}", e),
             };
             result
         },
-        Err(e) => panic!("kingston failed: {:#?}", e),
+        Err(e) => anyhow::bail!("kingston gather failed: {:#?}", e),
     };
     sessions.insert("pc".into(), kingston_client.session_id);
     Ok((sessions, game_result))

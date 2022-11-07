@@ -201,11 +201,11 @@ pub async fn gather_battlelog(influx_client: &influxdb2::Client, game_name: &str
         Ok(result) => {
             match super::push_to_database(influx_client, game_name, "pc", &result).await {
                 Ok(_) => {},
-                Err(_) => todo!(),
+                Err(_) => log::error!("{} failed to push to influxdb: {:#?}", game_name, e),
             };
             result
         },
-        Err(e) => panic!("{} failed: {:#?}", game_name, e),
+        Err(e) => anyhow::bail!("{} gather failed: {:#?}", game_name, e),
     };
 
     Ok(game_result)

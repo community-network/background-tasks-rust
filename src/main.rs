@@ -12,6 +12,8 @@ use mongo::MongoClient;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
+    flexi_logger::Logger::try_with_str("info")?.start()?;
+    
     let influx_client = Client::new("https://europe-west1-1.gcp.cloud2.influxdata.com", "Gametools network", "uWe8oo4ykDMatlYX2g_mJWt3jitcxIOaJU9rNaJUZGQuLPmi0KL_eIS8QqHq9EEjLkNTOoRdnZMFdARuzOIigw==");
     let mut mongo_client = MongoClient::connect().await?;
 
@@ -30,10 +32,10 @@ async fn main() -> anyhow::Result<()> {
     let mut sessions: HashMap<String, HashMap<String, String>> = HashMap::new();
 
     loop {
-        // match server_manager::save_server_manager_info(&influx_client, &mut mongo_client).await {
-        //     Ok(_) => {},
-        //     Err(e) => println!("Failed to send new manager info {:#?}", e),
-        // };
+        match server_manager::save_server_manager_info(&influx_client, &mut mongo_client).await {
+            Ok(_) => {},
+            Err(e) => log::error!("Failed to send new manager info {:#?}", e),
+        };
 
         // let old_games =  HashMap::from([
         //     ("bf2-playbf2", "playbf2"),
@@ -48,7 +50,7 @@ async fn main() -> anyhow::Result<()> {
         // for (key, value) in old_games.into_iter() {
         //     match old_games::push_old_games(&influx_client, &mut mongo_client, key, value).await {
         //         Ok(_) => {},
-        //         Err(e) => println!("Failed oldgame: {}, with reason: {:#?}", key, e),
+        //         Err(e) => log::error!("Failed oldgame: {}, with reason: {:#?}", key, e),
         //     };
         // }
 
@@ -63,7 +65,7 @@ async fn main() -> anyhow::Result<()> {
         //             sessions.insert(key.to_string(), session);
         //             platform_result
         //         },
-        //         Err(_) => todo!(),
+        //         Err(e) => log::error!("Failed sparta_game: {}, with reason: {:#?}", key, e),
         //     };
         // }
         // // pc only!
@@ -73,11 +75,14 @@ async fn main() -> anyhow::Result<()> {
         //     ("bfh", "https://battlelog.battlefield.com/bfh/servers/getServers/pc/")
         // ]);
         // for (key, value) in battlelog_games {
-        //     battlelog::gather_battlelog(&influx_client, key, value).await?;
+        //     let game_result = match battlelog::gather_battlelog(&influx_client, key, value).await {
+        //         Ok(game_result) => game_result,
+        //         Err(e) => log::error!("Failed battlelog_game: {}, with reason: {:#?}", key, e),
+        //     };
         // }
-        // match battlefield_grpc::gather_grpc(&influx_client, sessions.get("kingston").unwrap_or(&empty_game_hash).to_owned(), cookie.clone()).await {
-        //     Ok(_) => {},
-        //     Err(e) => println!("{:#?}", e),
-        // }
+        // let grpc_result = match battlefield_grpc::gather_grpc(&influx_client, sessions.get("kingston").unwrap_or(&empty_game_hash).to_owned(), cookie.clone()).await {
+        //     Ok(grpc_result) => grpc_result,
+        //     Err(e) => log::error!("Failed kingston_grpc, with reason: {:#?}", e),
+        // };
     }
 }

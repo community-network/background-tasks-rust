@@ -1,5 +1,5 @@
 use std::collections::HashMap;
-
+use futures::future::join_all;
 use crate::structs::companion::{ServerFilter, UnusedValue, Slots, Regions};
 use bf_sparta::sparta_api;
 
@@ -41,7 +41,7 @@ async fn region_players(region: &str, session: &String, game_name: &str, platfor
         "OC" => filters.regions.oc = "on".to_string(),
         "Afr" => filters.regions.afr = "on".to_string(),
         "AC" => filters.regions.ac = "on".to_string(),
-        _ => panic!("Unknown platform field")
+        _ => anyhow::bail!("Unknown platform field: {} for {}", region, game_name)
     };
 
     let filter_json = serde_json::json!({
@@ -112,14 +112,27 @@ async fn region_players(region: &str, session: &String, game_name: &str, platfor
 }
 
 async fn get_region_stats(game_name: &str, old_session: String, cookie: bf_sparta::cookie::Cookie, platform: &str) -> anyhow::Result<(String, HashMap<String, super::RegionResult>)> {
-    let session = sparta_api::check_gateway_session(cookie, &old_session, platform, game_name, "en-us").await?;
+    let session = match sparta_api::check_gateway_session(cookie, &old_session, platform, game_name, "en-us").await {
+        Ok(session) => session,
+        Err(e) => anyhow::bail!("{} session failed: {:#?}", game_name, e),
+    };
     let sparta_regions = vec!["EU", "Asia", "NAm", "SAm", "AU", "OC", "Afr", "AC"];
     let mut platform_result: HashMap<String, super::RegionResult> = HashMap::new();
+    let mut tasks = vec![];
     for region in sparta_regions {
-        let result = region_players(region, &session.session_id, game_name, platform).await?;
-        platform_result.insert(region.to_string(), result);
+        tasks.push(region_players(region, &session.session_id, game_name, platform));
     }
-    let all_regions = global_region_players(&platform_result).await?;
+    let result = join_all(tasks).await;
+    for item in result {
+        match item {
+            Ok(region_result) => platform_result.insert(region_result.clone().region, region_result),
+            Err(e) => log::error!("1 {} region failed!", game_name),
+        }
+    }
+    let all_regions = match global_region_players(&platform_result).await {
+        Ok(result) => result,
+        Err(e) => anyhow::bail!("Couldnt create global info for {}: {:#?}", game_name, e),
+    };
     platform_result.insert("ALL".to_string(), all_regions);
     Ok((session.session_id, platform_result))
 }
@@ -138,11 +151,11 @@ pub async fn gather_companion(influx_client: &influxdb2::Client, mut sessions: H
             Ok((sessions, platform_result)) => {
                 match super::push_to_database(influx_client, frontend_game_name, platform, &platform_result).await {
                     Ok(_) => {},
-                    Err(_) => todo!(),
+                    Err(e) => log::error!("{} failed to push to influxdb: {:#?}", game_name, e),
                 };
                 (sessions, platform_result)
             },
-            Err(e) => panic!("{} failed with platform {}: {:#?}", platform, game_name, e),
+            Err(e) => anyhow::bail!("{} failed with platform {}: {:#?}", platform, game_name, e),
         };
         sessions.insert(platform.into(), session);
         game_result.insert(platform.into(), platform_result);
