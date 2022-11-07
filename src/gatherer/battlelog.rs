@@ -3,6 +3,8 @@ use futures::future::join_all;
 use reqwest::header::HeaderMap;
 use serde::{Deserialize, Serialize};
 
+use crate::{structs::results, influx_db};
+
 #[derive(Serialize, Deserialize, Debug, Clone)]
 struct BattlelogServer {
     guid: String,
@@ -127,10 +129,10 @@ async fn get_all_regions(game_name: &str, base_uri: &str) -> anyhow::Result<Hash
     Ok(found_servers)
 }
 
-async fn server_list_to_sum(found_servers: HashMap<String, BattlelogServer>) -> anyhow::Result<HashMap<String, super::RegionResult>> {
-    let mut all_regions: super::RegionResult = super::RegionResult { 
+async fn server_list_to_sum(found_servers: HashMap<String, BattlelogServer>) -> anyhow::Result<HashMap<String, results::RegionResult>> {
+    let mut all_regions: results::RegionResult = results::RegionResult { 
         region: "ALL".to_string(),
-        amounts: super::RegionAmounts {
+        amounts: results::RegionAmounts {
             server_amount: 0,
             soldier_amount: 0,
             queue_amount: 0,
@@ -150,16 +152,16 @@ async fn server_list_to_sum(found_servers: HashMap<String, BattlelogServer>) -> 
         owner_platform: HashMap::new(),
     };
     
-    let mut regions: HashMap<String, super::RegionResult> = HashMap::new();
+    let mut regions: HashMap<String, results::RegionResult> = HashMap::new();
     for server in found_servers.values() {
         regions.entry(server.region.to_string()).and_modify(|region| {
             region.amounts.server_amount += 1;
             region.amounts.soldier_amount += server.soldier_amount;
             region.amounts.queue_amount += server.queue_amount;
         }).or_insert({
-            super::RegionResult { 
+            results::RegionResult { 
                 region: server.region.to_string(),
-                amounts: super::RegionAmounts {
+                amounts: results::RegionAmounts {
                     server_amount: 1,
                     soldier_amount: server.soldier_amount,
                     queue_amount: server.queue_amount,
@@ -189,17 +191,17 @@ async fn server_list_to_sum(found_servers: HashMap<String, BattlelogServer>) -> 
     Ok(regions)
 }
 
-async fn get_region_stats(game_name: &str, base_uri: &str) -> anyhow::Result<HashMap<String, super::RegionResult>> {
+async fn get_region_stats(game_name: &str, base_uri: &str) -> anyhow::Result<HashMap<String, results::RegionResult>> {
     let found_servers = get_all_regions(game_name, base_uri).await?;
     let result = server_list_to_sum(found_servers).await?;
 
     Ok(result)
 }
 
-pub async fn gather_battlelog(influx_client: &influxdb2::Client, game_name: &str, base_uri: &str) -> anyhow::Result<HashMap<String, super::RegionResult>> {
+pub async fn gather_battlelog(influx_client: &influxdb2::Client, game_name: &str, base_uri: &str) -> anyhow::Result<results::RegionResult> {
     let game_result = match get_region_stats(game_name, base_uri).await {
         Ok(result) => {
-            match super::push_to_database(influx_client, game_name, "pc", &result).await {
+            match influx_db::push_to_database(influx_client, game_name, "pc", &result).await {
                 Ok(_) => {},
                 Err(e) => log::error!("{} failed to push to influxdb: {:#?}", game_name, e),
             };
@@ -207,6 +209,10 @@ pub async fn gather_battlelog(influx_client: &influxdb2::Client, game_name: &str
         },
         Err(e) => anyhow::bail!("{} gather failed: {:#?}", game_name, e),
     };
+    let result = match game_result.get("ALL") {
+        Some(result) => result,
+        None => anyhow::bail!("{} has no ALL region!", game_name),
+    };
 
-    Ok(game_result)
+    Ok(result.to_owned())
 }

@@ -1,8 +1,10 @@
 mod mongo;
 mod gatherer;
 mod structs;
+mod influx_db;
 
 use gatherer::{server_manager, old_games, companion, battlelog, battlefield_grpc};
+use structs::results;
 use std::collections::HashMap;
 
 use influxdb2::Client;
@@ -37,6 +39,8 @@ async fn main() -> anyhow::Result<()> {
             Err(e) => log::error!("Failed to send new manager info {:#?}", e),
         };
 
+        let mut game_results: Vec<Option<results::RegionResult>> = vec![];
+
         let old_games =  HashMap::from([
             ("bf2-playbf2", "playbf2"),
             ("bf2-bf2hub", "bf2hub"),
@@ -48,10 +52,13 @@ async fn main() -> anyhow::Result<()> {
             ("bfvietnam-openspy", "openspy")
         ]);
         for (key, value) in old_games.into_iter() {
-            match old_games::push_old_games(&influx_client, &mut mongo_client, key, value).await {
-                Ok(_) => {},
-                Err(e) => log::error!("Failed oldgame: {}, with reason: {:#?}", key, e),
-            };
+            game_results.push(match old_games::push_old_games(&influx_client, &mut mongo_client, key, value).await {
+                Ok(game_result) => Some(game_result),
+                Err(e) => {
+                    log::error!("Failed oldgame: {}, with reason: {:#?}", key, e);
+                    None
+                },
+            });
         }
 
         let sparta_games = HashMap::from([
@@ -60,7 +67,7 @@ async fn main() -> anyhow::Result<()> {
             ("bf4", "bf4")
         ]);
         for (key, value) in sparta_games.into_iter() {
-            let platform_result = match companion::gather_companion(&influx_client, sessions.get(key).unwrap_or(&empty_game_hash).to_owned(), cookie.clone(), key, value).await {
+            game_results.push(match companion::gather_companion(&influx_client, sessions.get(key).unwrap_or(&empty_game_hash).to_owned(), cookie.clone(), key, value).await {
                 Ok((session, platform_result)) => {
                     sessions.insert(key.to_string(), session);
                     Some(platform_result)
@@ -69,7 +76,7 @@ async fn main() -> anyhow::Result<()> {
                     log::error!("Failed sparta_game: {}, with reason: {:#?}", key, e);
                     None
                 },
-            };
+            });
         }
         // pc only!
         let battlelog_games = HashMap::from([
@@ -78,21 +85,36 @@ async fn main() -> anyhow::Result<()> {
             ("bfh", "https://battlelog.battlefield.com/bfh/servers/getServers/pc/")
         ]);
         for (key, value) in battlelog_games {
-            let game_result = match battlelog::gather_battlelog(&influx_client, key, value).await {
+            game_results.push(match battlelog::gather_battlelog(&influx_client, key, value).await {
                 Ok(game_result) => Some(game_result),
                 Err(e) => {
                     log::error!("Failed battlelog_game: {}, with reason: {:#?}", key, e);
                     None
                 },
-            };
+            });
         }
-        let grpc_result = match battlefield_grpc::gather_grpc(&influx_client, sessions.get("kingston").unwrap_or(&empty_game_hash).to_owned(), cookie.clone()).await {
-            Ok(grpc_result) => Some(grpc_result),
+        game_results.push(match battlefield_grpc::gather_grpc(&influx_client, sessions.get("kingston").unwrap_or(&empty_game_hash).to_owned(), cookie.clone()).await {
+            Ok((session, game_result)) => {
+                sessions.insert("kingston".to_string(), session);
+                Some(game_result)
+            },
             Err(e) => {
                 log::error!("Failed kingston_grpc, with reason: {:#?}", e);
                 None
             },
-        };
+        });
         
+        // if no games failed, make global array
+        if game_results.iter().any(|result| !result.is_none()) {
+            let result: HashMap<String, results::RegionResult> = HashMap::new();
+            for (index, game) in game_results.iter().enumerate() {
+                result.insert(index.to_string(), game.unwrap());
+            }
+            let global_result = results::combine_region_players("global", &result).await;
+            match influx_db::push_totals(&influx_client, global_result).await {
+                Ok(_) => {},
+                Err(e) => log::error!("Failed to push global games array: {:#?}", e),
+            };
+        }
     }
 }
