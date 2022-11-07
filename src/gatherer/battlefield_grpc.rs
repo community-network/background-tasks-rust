@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use futures::future::join_all;
 use grpc_rust::{grpc::KingstonClient, modules::{communitygames::{ServerPropertyFilters, GetFilteredGameServersRequest, QName, GameFilters}, CommunityGames}};
 
-use super::global_region_players;
+use super::combine_region_players;
 
 async fn get_region_stats(kingston_client: &KingstonClient) -> anyhow::Result<HashMap<String, super::RegionResult>> {
     let grpc_regions = HashMap::from([
@@ -118,7 +118,7 @@ async fn get_region_stats(kingston_client: &KingstonClient) -> anyhow::Result<Ha
         regions.insert(region.to_string(), region_stats);
     }
 
-    let all_regions = match global_region_players(&regions).await {
+    let all_regions = match combine_region_players("ALL", &regions).await {
         Ok(result) => result,
         Err(e) => anyhow::bail!("Couldnt create global info for kingston: {:#?}", e),
     };

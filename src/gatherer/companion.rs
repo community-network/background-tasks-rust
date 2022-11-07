@@ -3,7 +3,7 @@ use futures::future::join_all;
 use crate::structs::companion::{ServerFilter, UnusedValue, Slots, Regions};
 use bf_sparta::sparta_api;
 
-use super::global_region_players;
+use super::combine_region_players;
 
 async fn region_players(region: &str, session: &String, game_name: &str, platform: &str) -> anyhow::Result<super::RegionResult> {
     let mut filters = ServerFilter {
@@ -129,7 +129,7 @@ async fn get_region_stats(game_name: &str, old_session: String, cookie: bf_spart
             Err(e) => log::error!("1 {} region failed!", game_name),
         }
     }
-    let all_regions = match global_region_players(&platform_result).await {
+    let all_regions = match combine_region_players("ALL", &platform_result).await {
         Ok(result) => result,
         Err(e) => anyhow::bail!("Couldnt create global info for {}: {:#?}", game_name, e),
     };

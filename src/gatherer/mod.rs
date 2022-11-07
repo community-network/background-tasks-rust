@@ -49,10 +49,10 @@ pub struct RegionResult {
     pub owner_platform: HashMap<String, i64>,
 }
 
-pub async fn global_region_players(region_results: &HashMap<String, RegionResult>) -> anyhow::Result<RegionResult> {
+pub async fn combine_region_players(region_name: &str, region_results: &HashMap<String, RegionResult>) -> anyhow::Result<RegionResult> {
 
     let mut all_regions = RegionResult { 
-        region: "ALL".to_string(),
+        region: region_name.to_string(),
         amounts: RegionAmounts {
             server_amount: 0,
             soldier_amount: 0,

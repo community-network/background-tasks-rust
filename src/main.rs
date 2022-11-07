@@ -32,10 +32,10 @@ async fn main() -> anyhow::Result<()> {
     let mut sessions: HashMap<String, HashMap<String, String>> = HashMap::new();
 
     loop {
-        match server_manager::save_server_manager_info(&influx_client, &mut mongo_client).await {
-            Ok(_) => {},
-            Err(e) => log::error!("Failed to send new manager info {:#?}", e),
-        };
+        // match server_manager::save_server_manager_info(&influx_client, &mut mongo_client).await {
+        //     Ok(_) => {},
+        //     Err(e) => log::error!("Failed to send new manager info {:#?}", e),
+        // };
 
         // let old_games =  HashMap::from([
         //     ("bf2-playbf2", "playbf2"),
@@ -54,20 +54,20 @@ async fn main() -> anyhow::Result<()> {
         //     };
         // }
 
-        // let sparta_games = HashMap::from([
-        //     ("tunguska", "bf1"),
-        //     ("casablanca", "bfv"),
-        //     ("bf4", "bf4")
-        // ]);
-        // for (key, value) in sparta_games.into_iter() {
-        //     let platform_result = match companion::gather_companion(&influx_client, sessions.get(key).unwrap_or(&empty_game_hash).to_owned(), cookie.clone(), key, value).await {
-        //         Ok((session, platform_result)) => {
-        //             sessions.insert(key.to_string(), session);
-        //             platform_result
-        //         },
-        //         Err(e) => log::error!("Failed sparta_game: {}, with reason: {:#?}", key, e),
-        //     };
-        // }
+        let sparta_games = HashMap::from([
+            ("tunguska", "bf1"),
+            ("casablanca", "bfv"),
+            ("bf4", "bf4")
+        ]);
+        for (key, value) in sparta_games.into_iter() {
+            let platform_result = match companion::gather_companion(&influx_client, sessions.get(key).unwrap_or(&empty_game_hash).to_owned(), cookie.clone(), key, value).await {
+                Ok((session, platform_result)) => {
+                    sessions.insert(key.to_string(), session);
+                    platform_result
+                },
+                Err(e) => log::error!("Failed sparta_game: {}, with reason: {:#?}", key, e),
+            };
+        }
         // // pc only!
         // let battlelog_games = HashMap::from([
         //     ("bf3", "https://battlelog.battlefield.com/bf3/servers/getAutoBrowseServers/"),
@@ -84,5 +84,6 @@ async fn main() -> anyhow::Result<()> {
         //     Ok(grpc_result) => grpc_result,
         //     Err(e) => log::error!("Failed kingston_grpc, with reason: {:#?}", e),
         // };
+
     }
 }
