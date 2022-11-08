@@ -144,6 +144,6 @@ async fn main() -> anyhow::Result<()> {
         }
 
         last_update.store(Utc::now().timestamp() / 60, atomic::Ordering::Relaxed);
-        sleep(Duration::from_secs(60)).await;
+        sleep(Duration::from_secs(240)).await;
     }
 }
