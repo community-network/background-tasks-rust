@@ -93,7 +93,7 @@ async fn get_all_regions(game_name: &str, base_uri: &str) -> anyhow::Result<Hash
                         offset += per_page;
                     },
                     Err(_) => {
-                        attempt += 1
+                        attempt += 1;
                     }
                 };
             },

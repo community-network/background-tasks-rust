@@ -124,7 +124,7 @@ async fn get_region_stats(game_name: &str, old_session: String, cookie: bf_spart
     for item in result {
         match item {
             Ok(region_result) => {platform_result.insert(region_result.clone().region, region_result);},
-            Err(e) => {log::error!("1 {} region failed!", game_name);},
+            Err(e) => {log::error!("1 {} region failed: {:#?}", game_name, e);},
         };
     }
     let all_regions = results::combine_region_players("ALL", &platform_result).await;

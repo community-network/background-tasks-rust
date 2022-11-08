@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 use futures::future::join_all;
-use grpc_rust::{grpc::KingstonClient, modules::{communitygames::{ServerPropertyFilters, GetFilteredGameServersRequest, QName, GameFilters}, CommunityGames}};
+use grpc_rust::{grpc::KingstonClient, modules::{communitygames::{ServerPropertyFilters, GetFilteredGameServersRequest, GameFilters}, CommunityGames}};
 
 use crate::{structs::results, influx_db};
 

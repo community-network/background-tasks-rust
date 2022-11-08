@@ -6,7 +6,7 @@ mod influx_db;
 use gatherer::{server_manager, old_games, companion, battlelog, battlefield_grpc};
 use structs::results;
 use std::collections::HashMap;
-
+use tokio::time::{sleep, Duration};
 use influxdb2::Client;
 use bf_sparta::cookie_request;
 use mongo::MongoClient;
@@ -15,6 +15,7 @@ use mongo::MongoClient;
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     flexi_logger::Logger::try_with_str("info")?.start()?;
+    log::info!("Starting...");
     
     let influx_client = Client::new("https://europe-west1-1.gcp.cloud2.influxdata.com", "Gametools network", "uWe8oo4ykDMatlYX2g_mJWt3jitcxIOaJU9rNaJUZGQuLPmi0KL_eIS8QqHq9EEjLkNTOoRdnZMFdARuzOIigw==");
     let mut mongo_client = MongoClient::connect().await?;
@@ -32,6 +33,8 @@ async fn main() -> anyhow::Result<()> {
 
     let empty_game_hash: HashMap<String, String> = HashMap::new();
     let mut sessions: HashMap<String, HashMap<String, String>> = HashMap::new();
+
+    log::info!("Started");
 
     loop {
         match server_manager::save_server_manager_info(&influx_client, &mut mongo_client).await {
@@ -55,7 +58,7 @@ async fn main() -> anyhow::Result<()> {
         for (key, value) in old_games.into_iter() {
             match old_games::push_old_games(&influx_client, &mut mongo_client, key, value).await {
                 Ok(game_result) => {
-                    game_results.insert(key.to_string(), game_result)
+                    game_results.insert(key.to_string(), game_result);
                 },
                 Err(e) => {
                     log::error!("Failed oldgame: {}, with reason: {:#?}", key, e);
@@ -115,9 +118,11 @@ async fn main() -> anyhow::Result<()> {
         } else {
             let global_result = results::combine_region_players("global", &game_results).await;
             match influx_db::push_totals(&influx_client, global_result).await {
-                Ok(_) => {},
+                Ok(_) => log::info!("successfully made global array"),
                 Err(e) => log::error!("Failed to push global games array: {:#?}", e),
             };
         }
+
+        sleep(Duration::from_secs(60)).await;
     }
 }

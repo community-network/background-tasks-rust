@@ -2,7 +2,7 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct OldGameServer {
-    pub numplayers: u64
+    pub numplayers: String
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]

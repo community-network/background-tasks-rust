@@ -19,15 +19,15 @@ pub async fn push_old_games(influx_client: &influxdb2::Client, mongo_client: &mu
         None => anyhow::bail!("No serverinfo gotten {}", frontend_game_name),
     };
 
-    let mut soldier_amount = 0;
+    let mut soldier_amount: i64 = 0;
     for server in &servers.server_list {
-        soldier_amount += server.numplayers;
+        soldier_amount += server.numplayers.parse::<i64>().unwrap_or_default();
     }
 
     let bucket = "bfStatus";
     let points = vec![
         build_data_point(frontend_game_name, "serverAmount", servers.server_list.len() as i64)?,
-        build_data_point(frontend_game_name, "soldierAmount", soldier_amount as i64)?,
+        build_data_point(frontend_game_name, "soldierAmount", soldier_amount)?,
     ];
     match influx_client.write(bucket, stream::iter(points)).await {
         Ok(_) => {},
