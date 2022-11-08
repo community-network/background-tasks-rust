@@ -1,5 +1,4 @@
 use std::collections::HashMap;
-use futures::future::join_all;
 use grpc_rust::{grpc::KingstonClient, modules::{communitygames::{ServerPropertyFilters, GetFilteredGameServersRequest, GameFilters}, CommunityGames}};
 
 use crate::{structs::results, influx_db};
@@ -69,11 +68,9 @@ async fn get_region_stats(kingston_client: &KingstonClient) -> anyhow::Result<Ha
             owner_platform: HashMap::new(),
         };
 
-        let mut tasks = vec![];
-
         for aws_region in aws_regions {
             for map in bf2042_maps.keys() {
-                tasks.push(CommunityGames::get_filtered_game_servers(
+                match CommunityGames::get_filtered_game_servers(
                     kingston_client,
                     GetFilteredGameServersRequest {
                         game_filters: Some(GameFilters {
@@ -88,30 +85,25 @@ async fn get_region_stats(kingston_client: &KingstonClient) -> anyhow::Result<Ha
                         }),
                         limit: 250,
                     },
-                ));
-            }
-        }
-
-        let result = join_all(tasks).await;
-        for item in result {
-            match item {
-                Ok(servers) => {
-                    for server in servers.servers {
-                        region_stats.amounts.server_amount += 1;
-                        region_stats.amounts.soldier_amount += server.players.unwrap_or_default().player_amount as i64;
-                        region_stats.amounts.queue_amount += server.que.unwrap_or_default().in_que as i64;
-                        region_stats.maps.entry(bf2042_maps.get(&server.current_map[..]).unwrap_or(&"").to_string())
-                            .and_modify(|count| *count += 1).or_insert(1);
-                        region_stats.modes.entry(bf2042_modes.get(&server.mode[..]).unwrap_or(&"").to_string())
-                            .and_modify(|count| *count += 1).or_insert(1);
-                        region_stats.owner_platform.entry(bf2042_platform.get(&server.owner.unwrap_or_default().platform_id).unwrap_or(&"").to_string())
-                            .and_modify(|count| *count += 1).or_insert(1);
-                        for setting in server.settings {
-                            region_stats.settings.entry(setting.param).and_modify(|count| *count += 1).or_insert(1);
+                ).await {
+                    Ok(servers) => {
+                        for server in servers.servers {
+                            region_stats.amounts.server_amount += 1;
+                            region_stats.amounts.soldier_amount += server.players.unwrap_or_default().player_amount as i64;
+                            region_stats.amounts.queue_amount += server.que.unwrap_or_default().in_que as i64;
+                            region_stats.maps.entry(bf2042_maps.get(&server.current_map[..]).unwrap_or(&"").to_string())
+                                .and_modify(|count| *count += 1).or_insert(1);
+                            region_stats.modes.entry(bf2042_modes.get(&server.mode[..]).unwrap_or(&"").to_string())
+                                .and_modify(|count| *count += 1).or_insert(1);
+                            region_stats.owner_platform.entry(bf2042_platform.get(&server.owner.unwrap_or_default().platform_id).unwrap_or(&"").to_string())
+                                .and_modify(|count| *count += 1).or_insert(1);
+                            for setting in server.settings {
+                                region_stats.settings.entry(setting.param).and_modify(|count| *count += 1).or_insert(1);
+                            }
                         }
-                    }
-                },
-                Err(_) => {},
+                    },
+                    Err(e) => log::error!("{} kingston region failed with map {}: {:#?}", aws_region, map, e),
+                };
             }
         }
 

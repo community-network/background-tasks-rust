@@ -1,5 +1,4 @@
 use std::collections::HashMap;
-use futures::future::join_all;
 use crate::{structs::{companion::{ServerFilter, UnusedValue, Slots, Regions}, results}, influx_db};
 use bf_sparta::sparta_api;
 
@@ -116,15 +115,10 @@ async fn get_region_stats(game_name: &str, old_session: String, cookie: bf_spart
     };
     let sparta_regions = vec!["EU", "Asia", "NAm", "SAm", "AU", "OC", "Afr", "AC"];
     let mut platform_result: HashMap<String, results::RegionResult> = HashMap::new();
-    let mut tasks = vec![];
     for region in sparta_regions {
-        tasks.push(region_players(region, &session.session_id, game_name, platform));
-    }
-    let result = join_all(tasks).await;
-    for item in result {
-        match item {
+        match region_players(region, &session.session_id, game_name, platform).await {
             Ok(region_result) => {platform_result.insert(region_result.clone().region, region_result);},
-            Err(e) => {log::error!("1 {} region failed: {:#?}", game_name, e);},
+            Err(e) => {log::error!("{} {} region failed: {:#?}", region, game_name, e);},
         };
     }
     let all_regions = results::combine_region_players("ALL", &platform_result).await;
