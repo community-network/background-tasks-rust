@@ -26,7 +26,7 @@ pub async fn push_to_database(influx_client: &influxdb2::Client, frontend_game_n
                 build_data_point(frontend_game_name, "amounts", key, platform, "diceServerAmount", &value.amounts.dice_server_amount)?,
                 build_data_point(frontend_game_name, "amounts", key, platform, "diceSoldierAmount", &value.amounts.dice_soldier_amount)?,
                 build_data_point(frontend_game_name, "amounts", key, platform, "diceQueueAmount", &value.amounts.dice_queue_amount)?,
-                build_data_point(frontend_game_name, "amounts", key, platform, "diceSpectatorAmount", &value.amounts.dice_soldier_amount)?,
+                build_data_point(frontend_game_name, "amounts", key, platform, "diceSpectatorAmount", &value.amounts.dice_spectator_amount)?,
                 build_data_point(frontend_game_name, "amounts", key, platform, "communityServerAmount", &value.amounts.community_server_amount)?,
                 build_data_point(frontend_game_name, "amounts", key, platform, "communitySoldierAmount", &value.amounts.community_soldier_amount)?,
                 build_data_point(frontend_game_name, "amounts", key, platform, "communityQueueAmount", &value.amounts.community_queue_amount)?,
@@ -57,7 +57,7 @@ pub async fn push_totals(influx_client: &influxdb2::Client, global_result: resul
     let points = vec![
         build_data_point("global", "amounts", "ALL", "global", "serverAmount", &global_result.amounts.server_amount)?,
         build_data_point("global", "amounts", "ALL", "global", "soldierAmount", &global_result.amounts.soldier_amount)?,
-        build_data_point("global", "amounts", "ALL", "global", "queueAmount", &global_result.amounts.soldier_amount)?,
+        build_data_point("global", "amounts", "ALL", "global", "queueAmount", &global_result.amounts.queue_amount)?,
     ];
     influx_client.write(bucket, stream::iter(points)).await?;
     Ok(())

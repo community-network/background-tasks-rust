@@ -46,7 +46,6 @@ async fn region_players(region: &str, session: &String, game_name: &str, platfor
         "game": game_name,
         "limit": 10000
     });
-    
     let result = sparta_api::get_data_from_ea(session, platform, game_name, "GameServer.searchServers", filter_json).await?;
 
     let default = &vec![];
