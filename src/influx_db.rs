@@ -57,6 +57,7 @@ pub async fn push_totals(influx_client: &influxdb2::Client, global_result: resul
     let points = vec![
         build_data_point("global", "amounts", "ALL", "global", "serverAmount", &global_result.amounts.server_amount)?,
         build_data_point("global", "amounts", "ALL", "global", "soldierAmount", &global_result.amounts.soldier_amount)?,
+        build_data_point("global", "amounts", "ALL", "global", "queueAmount", &global_result.amounts.soldier_amount)?,
     ];
     influx_client.write(bucket, stream::iter(points)).await?;
     Ok(())
