@@ -5,18 +5,38 @@ mod influx_db;
 
 use gatherer::{server_manager, old_games, companion, battlelog, battlefield_grpc};
 use structs::results;
-use std::collections::HashMap;
+use chrono::Utc;
+use std::{collections::HashMap, sync::{atomic, Arc}};
 use tokio::time::{sleep, Duration};
 use influxdb2::Client;
 use bf_sparta::cookie_request;
 use mongo::MongoClient;
+use warp::Filter;
 
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
+    let last_update = Arc::new(atomic::AtomicI64::new(Utc::now().timestamp() / 60));
+    let last_update_clone = Arc::clone(&last_update);
+
     flexi_logger::Logger::try_with_str("info")?.start()?;
     log::info!("Starting...");
     
+    tokio::spawn(async move {
+        let hello = warp::any().map(move || {
+            let last_update_i64 = last_update_clone.load(atomic::Ordering::Relaxed);
+            let now_minutes = Utc::now().timestamp() / 60;
+
+            // error if 10 minutes without updates
+            if (now_minutes - last_update_i64) > 10 {
+                return warp::reply::with_status(format!("{}", now_minutes - last_update_i64), warp::http::StatusCode::SERVICE_UNAVAILABLE);
+            } else {
+                return warp::reply::with_status(format!("{}", now_minutes - last_update_i64), warp::http::StatusCode::OK);
+            }
+        });
+        warp::serve(hello).run(([0, 0, 0, 0], 3030)).await;
+    });
+
     let influx_client = Client::new("https://europe-west1-1.gcp.cloud2.influxdata.com", "Gametools network", "uWe8oo4ykDMatlYX2g_mJWt3jitcxIOaJU9rNaJUZGQuLPmi0KL_eIS8QqHq9EEjLkNTOoRdnZMFdARuzOIigw==");
     let mut mongo_client = MongoClient::connect().await?;
 
@@ -123,6 +143,7 @@ async fn main() -> anyhow::Result<()> {
             };
         }
 
+        last_update.store(Utc::now().timestamp() / 60, atomic::Ordering::Relaxed);
         sleep(Duration::from_secs(60)).await;
     }
 }
