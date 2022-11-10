@@ -1,8 +1,12 @@
 use crate::structs::old_games;
-
-use mongodb::{Collection, Client};
+use std::collections::HashMap;
+use mongodb::{Collection, Client, Database};
+use serde::{Deserialize, Serialize};
 use mongodb::error::Result;
 use bson::Document;
+use chrono::{DateTime, Utc};
+use crate::structs::results;
+use mongodb::results::InsertOneResult;
 
 pub struct MongoClient {
     pub community_servers:  Collection<Document>,
@@ -10,19 +14,32 @@ pub struct MongoClient {
     pub player_list: Collection<Document>,
     pub logging: Collection<Document>,
     pub old_games_servers: Collection<old_games::OldGameServerList>,
+    pub graphing_db: Database,
     pub client: Client,
 }
 
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct ManagerInfo {
-    pub groups_count: u64,
-    pub server_count: u64,
-    pub player_count: u64,
-    pub auto_ping_kick_count: u64,
-    pub bfban_count: u64,
-    pub move_count: u64,
-    pub kick_count: u64,
-    pub ban_count: u64,
-    pub global_ban_kick_count: u64
+    #[serde(rename = "communityGroups")]
+    pub groups_count: i64,
+    #[serde(rename = "communityServers")]
+    pub server_count: i64,
+    #[serde(rename = "playerList")]
+    pub player_count: i64,
+    #[serde(rename = "autoKickPingAmount")]
+    pub auto_ping_kick_count: i64,
+    #[serde(rename = "bfbanAmount")]
+    pub bfban_count: i64,
+    #[serde(rename = "moveAmount")]
+    pub move_count: i64,
+    #[serde(rename = "kickAmount")]
+    pub kick_count: i64,
+    #[serde(rename = "banAmount")]
+    pub ban_count: i64,
+    #[serde(rename = "globalBanKickAmount")]
+    pub global_ban_kick_count: i64,
+    #[serde(with = "bson::serde_helpers::chrono_datetime_as_bson_datetime")]
+    pub timestamp: DateTime<Utc>,
 }
 
 impl MongoClient {
@@ -43,23 +60,48 @@ impl MongoClient {
             player_list: db.collection("playerList"),
             logging: db.collection("logging"),
             old_games_servers: gamestats_db.collection("oldGamesServerList"),
+            graphing_db: client.database("graphing"),
             client,
         })
 
     }
 
-    pub async fn gather_managerinfo(&mut self) -> Result<ManagerInfo> {
-        Ok(ManagerInfo { 
-            groups_count: self.community_groups.count_documents(None, None).await.unwrap_or(0),
-            server_count: self.community_servers.count_documents(None, None).await.unwrap_or(0),
-            player_count: self.player_list.count_documents(None, None).await.unwrap_or(0),
-            auto_ping_kick_count: self.logging.count_documents(bson::doc! {"action": "autokick-ping"}, None).await.unwrap_or(0),
-            bfban_count: self.logging.count_documents(bson::doc! {"action": "autokick-bfban"}, None).await.unwrap_or(0),
-            move_count: self.logging.count_documents(bson::doc! {"action": "movePlayer"}, None).await.unwrap_or(0),
-            kick_count: self.logging.count_documents(bson::doc! {"action": "kickPlayerg"}, None).await.unwrap_or(0),
-            ban_count: self.logging.count_documents(bson::doc! {"action": "addServerBan"}, None).await.unwrap_or(0),
-            global_ban_kick_count: self.logging.count_documents(bson::doc! {"action": "autokick-globalBans"}, None).await.unwrap_or(0)
-        })
+    pub async fn gather_managerinfo(&mut self) -> Result<InsertOneResult> {
+        let result = &ManagerInfo { 
+            groups_count: self.community_groups.count_documents(None, None).await.unwrap_or(0) as i64,
+            server_count: self.community_servers.count_documents(None, None).await.unwrap_or(0) as i64,
+            player_count: self.player_list.count_documents(None, None).await.unwrap_or(0) as i64,
+            auto_ping_kick_count: self.logging.count_documents(bson::doc! {"action": "autokick-ping"}, None).await.unwrap_or(0) as i64,
+            bfban_count: self.logging.count_documents(bson::doc! {"action": "autokick-bfban"}, None).await.unwrap_or(0) as i64,
+            move_count: self.logging.count_documents(bson::doc! {"action": "movePlayer"}, None).await.unwrap_or(0) as i64,
+            kick_count: self.logging.count_documents(bson::doc! {"action": "kickPlayerg"}, None).await.unwrap_or(0) as i64,
+            ban_count: self.logging.count_documents(bson::doc! {"action": "addServerBan"}, None).await.unwrap_or(0) as i64,
+            global_ban_kick_count: self.logging.count_documents(bson::doc! {"action": "autokick-globalBans"}, None).await.unwrap_or(0) as i64,
+            timestamp: Utc::now(),
+        };
+        
+        let collection: Collection<ManagerInfo> = self.graphing_db.collection("manager_info");
+        collection.insert_one(result, None).await
+    }
+
+    pub async fn push_to_database(&mut self, frontend_game_name: &str, platform_result: &HashMap<String, results::RegionResult>) -> anyhow::Result<()> {
+        let collection: Collection<results::RegionResult> = self.graphing_db.collection(frontend_game_name);
+        for (key, value) in platform_result {
+            match collection.insert_one(value, None).await {
+                Ok(_) => {},
+                Err(e) => {log::error!("Failed to push {} for {} to mongodb: {:#?}", key, frontend_game_name, e);}
+            };
+        }
+        Ok(())
+    }
+    
+    pub async fn push_old_games(&mut self, frontend_game_name: &str, game_result: results::OldGameResult) -> anyhow::Result<()> {
+        let collection: Collection<results::OldGameResult> = self.graphing_db.collection(frontend_game_name);
+        match collection.insert_one(game_result, None).await {
+            Ok(_) => {},
+            Err(e) => {log::error!("Failed to push {} to mongodb: {:#?}", frontend_game_name, e);}
+        };
+        Ok(())
     }
 
     pub async fn gather_old_title(&mut self, game_name: &str) -> Result<Option<old_games::OldGameServerList>> {

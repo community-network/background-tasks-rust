@@ -1,5 +1,7 @@
 use std::collections::HashMap;
 use serde::{Deserialize, Serialize};
+use chrono::{DateTime, Utc};
+
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct RegionAmounts {
@@ -30,14 +32,33 @@ pub struct RegionAmounts {
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
-pub struct RegionResult {
+pub struct OldGameResult {
+    pub metadata: Metadata,
+    #[serde(rename = "serverAmount")]
+    pub server_amount: i64,
+    #[serde(rename = "soldierAmount")]
+    pub soldier_amount: i64,
+    #[serde(with = "bson::serde_helpers::chrono_datetime_as_bson_datetime")]
+    pub timestamp: DateTime<Utc>,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct Metadata {
     pub region: String,
+    pub platform: String,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct RegionResult {
+    pub metadata: Metadata,
     pub amounts: RegionAmounts,
     pub maps: HashMap<String, i64>,
     pub modes: HashMap<String, i64>,
     pub settings: HashMap<String, i64>,
     #[serde(rename = "ownerPlatform")]
     pub owner_platform: HashMap<String, i64>,
+    #[serde(with = "bson::serde_helpers::chrono_datetime_as_bson_datetime")]
+    pub timestamp: DateTime<Utc>,
 }
 
 fn combine_regions(first_region: &RegionResult, second_region: &RegionResult) -> RegionResult {
@@ -76,9 +97,9 @@ fn combine_regions(first_region: &RegionResult, second_region: &RegionResult) ->
 }
 
 // the "ALL" region
-pub async fn combine_region_players(region_name: &str, region_results: &HashMap<String, RegionResult>) -> RegionResult {
+pub async fn combine_region_players(region_name: &str, platform_name: &str, region_results: &HashMap<String, RegionResult>) -> RegionResult {
     let mut all_regions = RegionResult { 
-        region: region_name.to_string(),
+        metadata: Metadata { region: region_name.to_string(), platform: platform_name.to_string() },
         amounts: RegionAmounts {
             server_amount: 0,
             soldier_amount: 0,
@@ -97,6 +118,7 @@ pub async fn combine_region_players(region_name: &str, region_results: &HashMap<
         modes: HashMap::new(),
         settings: HashMap::new(),
         owner_platform: HashMap::new(),
+        timestamp: Utc::now(),
     };
 
     for region in region_results.values() {
@@ -117,7 +139,7 @@ pub async fn combine_region_platforms(platform_results: &HashMap<String, HashMap
                 all_regions.amounts = result.amounts;
                 all_regions.maps = result.maps;
                 all_regions.modes = result.modes;
-                all_regions.region = result.region;
+                all_regions.metadata = result.metadata;
                 all_regions.settings = result.settings;
                 all_regions.owner_platform = result.owner_platform;
             }).or_insert(region_result.to_owned());

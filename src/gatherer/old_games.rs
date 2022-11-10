@@ -1,19 +1,8 @@
 use std::collections::HashMap;
-
-use futures::stream;
-use influxdb2::models::{DataPoint, data_point::DataPointError};
+use chrono::Utc;
 use crate::{mongo::MongoClient, structs::results};
 
-pub fn build_data_point(game_name: &str, field: &str, amount: i64) -> Result<DataPoint, DataPointError> {
-    DataPoint::builder(game_name)
-        .tag("type", "amounts")
-        .tag("region", "ALL")
-        .tag("platform", "pc")
-        .field(field, amount)
-        .build()
-}
-
-pub async fn push_old_games(influx_client: &influxdb2::Client, mongo_client: &mut MongoClient, mongo_game_name: &str, frontend_game_name: &str) -> anyhow::Result<results::RegionResult> {
+pub async fn push_old_games(mongo_client: &mut MongoClient, mongo_game_name: &str, frontend_game_name: &str) -> anyhow::Result<results::RegionResult> {
     let servers = match mongo_client.gather_old_title(mongo_game_name).await? {
         Some(servers) => servers,
         None => anyhow::bail!("No serverinfo gotten {}", frontend_game_name),
@@ -24,17 +13,15 @@ pub async fn push_old_games(influx_client: &influxdb2::Client, mongo_client: &mu
         soldier_amount += server.numplayers.parse::<i64>().unwrap_or_default();
     }
 
-    let bucket = "bfStatus";
-    let points = vec![
-        build_data_point(frontend_game_name, "serverAmount", servers.server_list.len() as i64)?,
-        build_data_point(frontend_game_name, "soldierAmount", soldier_amount)?,
-    ];
-    match influx_client.write(bucket, stream::iter(points)).await {
-        Ok(_) => {},
-        Err(e) => log::error!("{} failed to push to influxdb: {:#?}", frontend_game_name, e),
+    let game_result = results::OldGameResult {
+        metadata: results::Metadata { region: "ALL".to_string(), platform: "pc".to_string() },
+        server_amount: servers.server_list.len() as i64,
+        soldier_amount,
+        timestamp: Utc::now(),
     };
+    mongo_client.push_old_games(frontend_game_name, game_result).await?;
     Ok(results::RegionResult { 
-        region: "ALL".to_string(),
+        metadata: results::Metadata { region: "ALL".to_string(), platform: "pc".to_string() },
         amounts: results::RegionAmounts {
             server_amount: servers.server_list.len() as i64,
             soldier_amount: soldier_amount as i64,
@@ -53,5 +40,6 @@ pub async fn push_old_games(influx_client: &influxdb2::Client, mongo_client: &mu
         modes: HashMap::new(),
         settings: HashMap::new(),
         owner_platform: HashMap::new(),
+        timestamp: Utc::now(),
     })
 }

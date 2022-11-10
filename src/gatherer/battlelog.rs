@@ -1,9 +1,10 @@
 use std::collections::HashMap;
 use futures::future::join_all;
 use reqwest::header::HeaderMap;
+use chrono::Utc;
 use serde::{Deserialize, Serialize};
 
-use crate::{structs::results, influx_db};
+use crate::{mongo::MongoClient, structs::results};
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 struct BattlelogServer {
@@ -28,10 +29,14 @@ async fn get_battlelog_keeper_data(guid: &String) -> anyhow::Result<(&String, us
                         players += item["players"].as_array().unwrap_or(&vec![]).len();
                     }
                 },
-                Err(_) => todo!(),
+                Err(e) => {
+                    log::error!("bf4 failed to read json of snapshot of guid {}: {:#?}", guid, e);
+                },
             }
         },
-        Err(_) => todo!(),
+        Err(e) => {
+            log::error!("bf4 failed to get snapshot of guid {}: {:#?}", guid, e);
+        },
     }
 
     Ok((guid, players))
@@ -131,7 +136,7 @@ async fn get_all_regions(game_name: &str, base_uri: &str) -> anyhow::Result<Hash
 
 async fn server_list_to_sum(found_servers: HashMap<String, BattlelogServer>) -> anyhow::Result<HashMap<String, results::RegionResult>> {
     let mut all_regions: results::RegionResult = results::RegionResult { 
-        region: "ALL".to_string(),
+        metadata: results::Metadata { region: "ALL".to_string(), platform: "pc".to_string() },
         amounts: results::RegionAmounts {
             server_amount: 0,
             soldier_amount: 0,
@@ -150,6 +155,7 @@ async fn server_list_to_sum(found_servers: HashMap<String, BattlelogServer>) -> 
         modes: HashMap::new(),
         settings: HashMap::new(),
         owner_platform: HashMap::new(),
+        timestamp: Utc::now(),
     };
     
     let mut regions: HashMap<String, results::RegionResult> = HashMap::new();
@@ -160,7 +166,7 @@ async fn server_list_to_sum(found_servers: HashMap<String, BattlelogServer>) -> 
             region.amounts.queue_amount += server.queue_amount;
         }).or_insert({
             results::RegionResult { 
-                region: server.region.to_string(),
+                metadata: results::Metadata { region: server.region.to_string(), platform: "pc".to_string() },
                 amounts: results::RegionAmounts {
                     server_amount: 1,
                     soldier_amount: server.soldier_amount,
@@ -179,6 +185,7 @@ async fn server_list_to_sum(found_servers: HashMap<String, BattlelogServer>) -> 
                 modes: HashMap::new(),
                 settings: HashMap::new(),
                 owner_platform: HashMap::new(),
+                timestamp: Utc::now(),
             }
         });
 
@@ -198,10 +205,10 @@ async fn get_region_stats(game_name: &str, base_uri: &str) -> anyhow::Result<Has
     Ok(result)
 }
 
-pub async fn gather_battlelog(influx_client: &influxdb2::Client, game_name: &str, base_uri: &str) -> anyhow::Result<results::RegionResult> {
+pub async fn gather_battlelog(mongo_client: &mut MongoClient, game_name: &str, base_uri: &str) -> anyhow::Result<results::RegionResult> {
     let game_result = match get_region_stats(game_name, base_uri).await {
         Ok(result) => {
-            match influx_db::push_to_database(influx_client, game_name, "pc", &result).await {
+            match mongo_client.push_to_database(game_name, &result).await {
                 Ok(_) => {},
                 Err(e) => log::error!("{} failed to push to influxdb: {:#?}", game_name, e),
             };

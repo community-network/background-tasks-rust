@@ -1,7 +1,8 @@
 use std::collections::HashMap;
+use chrono::Utc;
 use grpc_rust::{grpc::KingstonClient, modules::{communitygames::{ServerPropertyFilters, GetFilteredGameServersRequest, GameFilters}, CommunityGames}};
 
-use crate::{structs::results, influx_db};
+use crate::{mongo::MongoClient, structs::results};
 
 async fn get_region_stats(kingston_client: &KingstonClient) -> anyhow::Result<HashMap<String, results::RegionResult>> {
     let grpc_regions = HashMap::from([
@@ -47,7 +48,7 @@ async fn get_region_stats(kingston_client: &KingstonClient) -> anyhow::Result<Ha
 
     for (region, aws_regions) in grpc_regions {
         let mut region_stats: results::RegionResult = results::RegionResult { 
-            region: region.to_string(),
+            metadata: results::Metadata { region: region.to_string(), platform: "global".to_string() },
             amounts: results::RegionAmounts {
                 server_amount: 0,
                 soldier_amount: 0,
@@ -66,6 +67,7 @@ async fn get_region_stats(kingston_client: &KingstonClient) -> anyhow::Result<Ha
             modes: HashMap::new(),
             settings: HashMap::new(),
             owner_platform: HashMap::new(),
+            timestamp: Utc::now(),
         };
 
         for aws_region in aws_regions {
@@ -110,12 +112,12 @@ async fn get_region_stats(kingston_client: &KingstonClient) -> anyhow::Result<Ha
         regions.insert(region.to_string(), region_stats);
     }
 
-    let all_regions = results::combine_region_players("ALL", &regions).await;
+    let all_regions = results::combine_region_players("ALL", "global", &regions).await;
     regions.insert("ALL".to_string(), all_regions);
     Ok(regions)
 }
 
-pub async fn gather_grpc(influx_client: &influxdb2::Client, mut sessions: HashMap<String, String>, cookie: bf_sparta::cookie::Cookie) -> anyhow::Result<(HashMap<String, String>, results::RegionResult)> {
+pub async fn gather_grpc(mongo_client: &mut MongoClient, mut sessions: HashMap<String, String>, cookie: bf_sparta::cookie::Cookie) -> anyhow::Result<(HashMap<String, String>, results::RegionResult)> {
     let mut kingston_client = KingstonClient::new(sessions.get("pc").unwrap_or(&"".to_string()).to_string()).await?;
     match kingston_client.auth(cookie.clone()).await {
         Ok(_) => {},
@@ -123,7 +125,7 @@ pub async fn gather_grpc(influx_client: &influxdb2::Client, mut sessions: HashMa
     };
     let game_result = match get_region_stats(&kingston_client).await {
         Ok(result) => {
-            match influx_db::push_to_database(influx_client, "bf2042portal", "global", &result).await {
+            match mongo_client.push_to_database("bf2042portal", &result).await {
                 Ok(_) => {},
                 Err(e) => log::error!("kingston failed to push to influxdb: {:#?}", e),
             };

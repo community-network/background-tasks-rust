@@ -1,5 +1,6 @@
 use std::collections::HashMap;
-use crate::{structs::{companion::{ServerFilter, UnusedValue, Slots, Regions}, results}, influx_db};
+use chrono::Utc;
+use crate::{structs::{companion::{ServerFilter, UnusedValue, Slots, Regions}, results}, MongoClient};
 use bf_sparta::sparta_api;
 
 async fn region_players(region: &str, session: &String, game_name: &str, platform: &str) -> anyhow::Result<results::RegionResult> {
@@ -98,12 +99,13 @@ async fn region_players(region: &str, session: &String, game_name: &str, platfor
     }
 
     Ok(results::RegionResult {
-        region: region.to_string(),
+        metadata: results::Metadata { region: region.to_string(), platform: platform.to_string() },
         amounts: region_amounts,
         maps: map_amounts,
         modes: mode_amounts,
         settings: HashMap::new(),
         owner_platform: HashMap::new(),
+        timestamp: Utc::now(),
     })
 }
 
@@ -116,16 +118,16 @@ async fn get_region_stats(game_name: &str, old_session: String, cookie: bf_spart
     let mut platform_result: HashMap<String, results::RegionResult> = HashMap::new();
     for region in sparta_regions {
         match region_players(region, &session.session_id, game_name, platform).await {
-            Ok(region_result) => {platform_result.insert(region_result.clone().region, region_result);},
+            Ok(region_result) => {platform_result.insert(region_result.clone().metadata.region, region_result);},
             Err(e) => {log::error!("{} {} region failed: {:#?}", region, game_name, e);},
         };
     }
-    let all_regions = results::combine_region_players("ALL", &platform_result).await;
+    let all_regions = results::combine_region_players("ALL", platform, &platform_result).await;
     platform_result.insert("ALL".to_string(), all_regions);
     Ok((session.session_id, platform_result))
 }
 
-pub async fn gather_companion(influx_client: &influxdb2::Client, mut sessions: HashMap<String, String>, cookie: bf_sparta::cookie::Cookie, game_name: &str, frontend_game_name: &str) -> anyhow::Result<(HashMap<String, String>, results::RegionResult)> {
+pub async fn gather_companion(mongo_client: &mut MongoClient, mut sessions: HashMap<String, String>, cookie: bf_sparta::cookie::Cookie, game_name: &str, frontend_game_name: &str) -> anyhow::Result<(HashMap<String, String>, results::RegionResult)> {
     let game_platforms = match &game_name.to_string()[..] {
         "tunguska" => vec!["pc", "ps4", "xboxone"],
         "casablanca" => vec!["pc", "ps4", "xboxone"],
@@ -137,7 +139,7 @@ pub async fn gather_companion(influx_client: &influxdb2::Client, mut sessions: H
     for platform in game_platforms {
         let (session, platform_result) = match get_region_stats(game_name, sessions.get(platform).unwrap_or(&"".to_string()).to_string(), cookie.clone(), platform).await {
             Ok((sessions, platform_result)) => {
-                match influx_db::push_to_database(influx_client, frontend_game_name, platform, &platform_result).await {
+                match mongo_client.push_to_database(frontend_game_name, &platform_result).await {
                     Ok(_) => {},
                     Err(e) => log::error!("{} failed to push to influxdb: {:#?}", game_name, e),
                 };
@@ -150,7 +152,7 @@ pub async fn gather_companion(influx_client: &influxdb2::Client, mut sessions: H
     }
 
     let combined_platform_regions = results::combine_region_platforms(&game_result).await;
-    match influx_db::push_to_database(influx_client, frontend_game_name, "global", &combined_platform_regions).await {
+    match mongo_client.push_to_database(frontend_game_name, &combined_platform_regions).await {
         Ok(_) => {},
         Err(e) => log::error!("{} failed to push to influxdb: {:#?}", game_name, e),
     };
