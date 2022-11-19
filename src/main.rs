@@ -7,7 +7,7 @@ use structs::results;
 use chrono::Utc;
 use std::{collections::HashMap, sync::{atomic, Arc}};
 use tokio::time::{sleep, Duration};
-use bf_sparta::cookie_request;
+use bf_sparta::{cookie_request, sparta_api};
 use mongo::MongoClient;
 use warp::Filter;
 
@@ -37,15 +37,31 @@ async fn main() -> anyhow::Result<()> {
 
     let mut mongo_client = MongoClient::connect().await?;
 
-    // https://github.com/aprimadi/influxdb2
-    let cookie_auth = cookie_request::request_cookie(cookie_request::Login {
-        email: "api4@gametools.network".to_string(),
-        pass: "bqgPAHJDphaTpPcbRk8jfHhbCecnTnRN".to_string(),
-    })
-    .await?;
-    let cookie = &bf_sparta::cookie::Cookie {
-        sid: cookie_auth.sid,
-        remid: cookie_auth.remid,
+    let mut cookie = match mongo_client.get_cookies("api4@gametools.network").await {
+        Ok(result) => result,
+        Err(_) => {
+            bf_sparta::cookie::Cookie {
+                sid: "".to_string(),
+                remid: "".to_string(),
+            }
+        },
+    };
+
+    cookie = match sparta_api::get_token(cookie.clone(), "pc", "tunguska", "en-us").await {
+        Ok(_) => cookie.clone(),
+        Err(_) => {
+            let cookie_auth = cookie_request::request_cookie(cookie_request::Login {
+                email: "api4@gametools.network".to_string(),
+                pass: "bqgPAHJDphaTpPcbRk8jfHhbCecnTnRN".to_string(),
+            })
+            .await?;
+            let cookie = bf_sparta::cookie::Cookie {
+                sid: cookie_auth.sid,
+                remid: cookie_auth.remid,
+            };
+            mongo_client.push_new_cookies("api4@gametools.network", &cookie).await?;
+            cookie
+        }
     };
 
     let empty_game_hash: HashMap<String, String> = HashMap::new();
@@ -130,15 +146,15 @@ async fn main() -> anyhow::Result<()> {
         };
         
         // if no games failed, make global array
-        // if failed_games.iter().any(|&value| vec!["bf3", "bf4", "bfh", "tunguska", "casablanca", "kingston"].contains(&value)) {
-        //     log::error!("1 of the important games failed to gather, skipping global array...");
-        // } else {
-        //     let global_result = results::combine_region_players("global", "global", &game_results).await;
-        //     match influx_db::push_totals(&influx_client, global_result).await {
-        //         Ok(_) => log::info!("successfully made global array"),
-        //         Err(e) => log::error!("Failed to push global games array: {:#?}", e),
-        //     };
-        // }
+        if failed_games.iter().any(|&value| vec!["bf3", "bf4", "bfh", "tunguska", "casablanca", "kingston"].contains(&value)) {
+            log::error!("1 of the important games failed to gather, skipping global array...");
+        } else {
+            let global_result = results::combine_region_players("global", "global", &game_results).await;
+            match mongo_client.push_totals(global_result).await {
+                Ok(_) => log::info!("successfully made global array"),
+                Err(e) => log::error!("Failed to push global games array: {:#?}", e),
+            };
+        }
 
         last_update.store(Utc::now().timestamp() / 60, atomic::Ordering::Relaxed);
         sleep(Duration::from_secs(240)).await;

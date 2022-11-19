@@ -1,6 +1,7 @@
 use crate::structs::old_games;
 use std::collections::HashMap;
-use mongodb::{Collection, Client, Database};
+use bf_sparta::cookie::Cookie;
+use mongodb::{Collection, Client, Database, options::ReplaceOptions, results::UpdateResult};
 use serde::{Deserialize, Serialize};
 use mongodb::error::Result;
 use bson::Document;
@@ -9,6 +10,7 @@ use crate::structs::results;
 use mongodb::results::InsertOneResult;
 
 pub struct MongoClient {
+    pub backend_cookies: Collection<BackendCookie>,
     pub community_servers:  Collection<Document>,
     pub community_groups: Collection<Document>,
     pub player_list: Collection<Document>,
@@ -16,6 +18,22 @@ pub struct MongoClient {
     pub old_games_servers: Collection<old_games::OldGameServerList>,
     pub graphing_db: Database,
     pub client: Client,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct BackendCookie {
+    pub _id: String,
+    pub sid: String,
+    pub remid: String
+}
+
+impl From<BackendCookie> for Cookie {
+    fn from(cookie: BackendCookie) -> Self {
+        Cookie {
+            remid: cookie.remid,
+            sid: cookie.sid,
+        }
+    }
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -55,6 +73,7 @@ impl MongoClient {
         let gamestats_db = client.database("gamestats");
         
         Ok(MongoClient {
+            backend_cookies: db.collection("backendCookies"),
             community_servers: db.collection("communityServers"),
             community_groups: db.collection("communityGroups"),
             player_list: db.collection("playerList"),
@@ -84,6 +103,28 @@ impl MongoClient {
         collection.insert_one(result, None).await
     }
 
+    pub async fn push_new_cookies(&mut self, acc_email: &str, cookie: &Cookie) -> Result<UpdateResult> {
+        let id = acc_email.split("@").collect::<Vec<&str>>()[0];
+        let cookie = BackendCookie {
+            _id: format!("main-{}", id),
+            sid: cookie.sid.clone(),
+            remid: cookie.remid.clone(),
+        };
+        let options = ReplaceOptions::builder().upsert(true).build();
+        self.backend_cookies.replace_one(
+            bson::doc! {"_id": format!("main-{}", id)},
+            cookie,
+            options).await
+    }
+
+    pub async fn get_cookies(&mut self, acc_email: &str) -> anyhow::Result<Cookie> {
+        let backend_cookie = match self.backend_cookies.find_one(bson::doc! {"_id": format!("main-{}", acc_email.split("@").collect::<Vec<&str>>()[0])}, None).await? {
+            Some(result) => result,
+            None => anyhow::bail!("no cookie"),
+        };
+        Ok(backend_cookie.into())
+    }
+
     pub async fn push_to_database(&mut self, frontend_game_name: &str, platform_result: &HashMap<String, results::RegionResult>) -> anyhow::Result<()> {
         let collection: Collection<results::RegionResult> = self.graphing_db.collection(frontend_game_name);
         for (key, value) in platform_result {
@@ -92,6 +133,11 @@ impl MongoClient {
                 Err(e) => {log::error!("Failed to push {} for {} to mongodb: {:#?}", key, frontend_game_name, e);}
             };
         }
+        Ok(())
+    }
+
+    pub async fn push_totals(&mut self, global_result: results::RegionResult) -> anyhow::Result<()> {
+        
         Ok(())
     }
     
