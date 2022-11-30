@@ -27,7 +27,8 @@ async fn get_region_stats(kingston_client: &KingstonClient) -> anyhow::Result<Ha
         ("MP_Discarded", "Discarded"),
         ("MP_LongHaul", "Manifest"),
         ("MP_TheWall", "Renewal"),
-        ("MP_Ridge", "Exposure")
+        ("MP_Ridge", "Exposure"),
+        ("MP_LightsOut", "Spearhead")
     ]);
     let bf2042_modes = HashMap::from([
         ("ConquestSmall", "Conquest"),
