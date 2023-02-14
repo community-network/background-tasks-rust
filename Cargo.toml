@@ -6,29 +6,29 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-anyhow = "1.0.66"
-mongodb = "2.3.1"
-futures = "0.3.17"
-chrono = "0.4.22"
+anyhow = "1.0"
+mongodb = "2.3"
+futures = "0.3"
+chrono = "0.4"
 num-traits = "0.2"
-serde_json = "1.0.87"
+serde_json = "1.0"
 log = "0.4"
-flexi_logger = "0.24.1"
+flexi_logger = "0.24"
 
 [dependencies.serde]
-version = "1.0.126"
+version = "1.0"
 features = ["derive"]
 
 [dependencies.warp]
-version = "0.3.1"
+version = "0.3"
 features = ["tls"]
 
 [dependencies.bson]
-version = "2.4.0"
+version = "2.5"
 features = ["chrono-0_4"]
 
 [dependencies.tokio]
-version = "1.7"
+version = "1.25"
 features = ["full"]
 
 [dependencies.bf_sparta]
@@ -40,6 +40,6 @@ git = "https://github.com/community-network/grpc-rust"
 branch = "main"
 
 [dependencies.reqwest]
-version = "0.11.12"
+version = "0.11"
 default-features = false
 features = ["rustls-tls", "json"]

@@ -1,7 +1,6 @@
-use std::collections::HashMap;
-use serde::{Deserialize, Serialize};
 use chrono::{DateTime, Utc};
-
+use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct RegionAmounts {
@@ -71,35 +70,57 @@ fn combine_regions(first_region: &RegionResult, second_region: &RegionResult) ->
     combined_regions.amounts.dice_soldier_amount += second_region.amounts.dice_soldier_amount;
     combined_regions.amounts.dice_queue_amount += second_region.amounts.dice_queue_amount;
     combined_regions.amounts.dice_spectator_amount += second_region.amounts.dice_spectator_amount;
-    combined_regions.amounts.community_server_amount += second_region.amounts.community_server_amount;
-    combined_regions.amounts.community_soldier_amount += second_region.amounts.community_soldier_amount;
+    combined_regions.amounts.community_server_amount +=
+        second_region.amounts.community_server_amount;
+    combined_regions.amounts.community_soldier_amount +=
+        second_region.amounts.community_soldier_amount;
     combined_regions.amounts.community_queue_amount += second_region.amounts.community_queue_amount;
-    combined_regions.amounts.community_spectator_amount += second_region.amounts.community_spectator_amount;
+    combined_regions.amounts.community_spectator_amount +=
+        second_region.amounts.community_spectator_amount;
 
     for (key, value) in &second_region.maps {
-        combined_regions.maps.entry(key.to_string())
-            .and_modify(|count| *count += value).or_insert(*value);
+        combined_regions
+            .maps
+            .entry(key.to_string())
+            .and_modify(|count| *count += value)
+            .or_insert(*value);
     }
     for (key, value) in &second_region.modes {
-        combined_regions.modes.entry(key.to_string())
-            .and_modify(|count| *count += value).or_insert(*value);
+        combined_regions
+            .modes
+            .entry(key.to_string())
+            .and_modify(|count| *count += value)
+            .or_insert(*value);
     }
     for (key, value) in &second_region.settings {
-        combined_regions.settings.entry(key.to_string())
-            .and_modify(|count| *count += value).or_insert(*value);
+        combined_regions
+            .settings
+            .entry(key.to_string())
+            .and_modify(|count| *count += value)
+            .or_insert(*value);
     }
     for (key, value) in &second_region.owner_platform {
-        combined_regions.owner_platform.entry(key.to_string())
-            .and_modify(|count| *count += value).or_insert(*value);
+        combined_regions
+            .owner_platform
+            .entry(key.to_string())
+            .and_modify(|count| *count += value)
+            .or_insert(*value);
     }
 
     combined_regions
 }
 
 // the "ALL" region
-pub async fn combine_region_players(region_name: &str, platform_name: &str, region_results: &HashMap<String, RegionResult>) -> RegionResult {
-    let mut all_regions = RegionResult { 
-        metadata: Metadata { region: region_name.to_string(), platform: platform_name.to_string() },
+pub async fn combine_region_players(
+    region_name: &str,
+    platform_name: &str,
+    region_results: &HashMap<String, RegionResult>,
+) -> RegionResult {
+    let mut all_regions = RegionResult {
+        metadata: Metadata {
+            region: region_name.to_string(),
+            platform: platform_name.to_string(),
+        },
         amounts: RegionAmounts {
             server_amount: 0,
             soldier_amount: 0,
@@ -129,20 +150,25 @@ pub async fn combine_region_players(region_name: &str, platform_name: &str, regi
 }
 
 // global platform for game
-pub async fn combine_region_platforms(platform_results: &HashMap<String, HashMap<String, RegionResult>>) -> HashMap<String, RegionResult> {
+pub async fn combine_region_platforms(
+    platform_results: &HashMap<String, HashMap<String, RegionResult>>,
+) -> HashMap<String, RegionResult> {
     let mut all_platforms: HashMap<String, RegionResult> = HashMap::new();
 
-    for (_, platform_result) in platform_results {
+    for platform_result in platform_results.values() {
         for (region_name, region_result) in platform_result {
-            all_platforms.entry(region_name.to_string()).and_modify(|all_regions| {
-                let result = combine_regions(&all_regions, region_result);
-                all_regions.amounts = result.amounts;
-                all_regions.maps = result.maps;
-                all_regions.modes = result.modes;
-                all_regions.metadata = result.metadata;
-                all_regions.settings = result.settings;
-                all_regions.owner_platform = result.owner_platform;
-            }).or_insert(region_result.to_owned());
+            all_platforms
+                .entry(region_name.to_string())
+                .and_modify(|all_regions| {
+                    let result = combine_regions(all_regions, region_result);
+                    all_regions.amounts = result.amounts;
+                    all_regions.maps = result.maps;
+                    all_regions.modes = result.modes;
+                    all_regions.metadata = result.metadata;
+                    all_regions.settings = result.settings;
+                    all_regions.owner_platform = result.owner_platform;
+                })
+                .or_insert_with(|| region_result.to_owned());
         }
     }
 
