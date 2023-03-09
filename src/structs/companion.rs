@@ -1,8 +1,7 @@
 use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize)]
-pub struct UnusedValue {
-}
+pub struct UnusedValue {}
 
 #[derive(Serialize, Deserialize)]
 pub struct Slots {
@@ -12,7 +11,7 @@ pub struct Slots {
     pub six_to_ten: String,
     #[serde(rename = "tenPlus")]
     pub ten_plus: String,
-    pub none: String
+    pub none: String,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -46,5 +45,5 @@ pub struct ServerFilter {
     pub regions: Regions,
     pub kits: UnusedValue,
     pub misc: UnusedValue,
-    pub scales: UnusedValue
+    pub scales: UnusedValue,
 }

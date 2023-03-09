@@ -28,7 +28,7 @@ version = "2.5"
 features = ["chrono-0_4"]
 
 [dependencies.tokio]
-version = "1.25"
+version = "1.26"
 features = ["full"]
 
 [dependencies.bf_sparta]

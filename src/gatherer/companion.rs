@@ -1,9 +1,20 @@
-use std::collections::HashMap;
-use chrono::Utc;
-use crate::{structs::{companion::{ServerFilter, UnusedValue, Slots, Regions}, results}, MongoClient};
+use crate::{
+    structs::{
+        companion::{Regions, ServerFilter, Slots, UnusedValue},
+        results,
+    },
+    MongoClient,
+};
 use bf_sparta::sparta_api;
+use chrono::Utc;
+use std::collections::HashMap;
 
-async fn region_players(region: &str, session: &String, game_name: &str, platform: &str) -> anyhow::Result<results::RegionResult> {
+async fn region_players(
+    region: &str,
+    session: &String,
+    game_name: &str,
+    platform: &str,
+) -> anyhow::Result<results::RegionResult> {
     let mut filters = ServerFilter {
         version: 6,
         name: "".to_string(),
@@ -25,9 +36,9 @@ async fn region_players(region: &str, session: &String, game_name: &str, platfor
             afr: "off".to_string(),
             ac: "off".to_string(),
         },
-        kits:  UnusedValue {},
-        misc:  UnusedValue {},
-        scales:  UnusedValue {},
+        kits: UnusedValue {},
+        misc: UnusedValue {},
+        scales: UnusedValue {},
     };
 
     match region {
@@ -39,7 +50,7 @@ async fn region_players(region: &str, session: &String, game_name: &str, platfor
         "OC" => filters.regions.oc = "on".to_string(),
         "Afr" => filters.regions.afr = "on".to_string(),
         "AC" => filters.regions.ac = "on".to_string(),
-        _ => anyhow::bail!("Unknown platform field: {} for {}", region, game_name)
+        _ => anyhow::bail!("Unknown platform field: {} for {}", region, game_name),
     };
 
     let filter_json = serde_json::json!({
@@ -47,10 +58,19 @@ async fn region_players(region: &str, session: &String, game_name: &str, platfor
         "game": game_name,
         "limit": 10000
     });
-    let result = sparta_api::get_data_from_ea(session, platform, game_name, "GameServer.searchServers", filter_json).await?;
+    let result = sparta_api::get_data_from_ea(
+        session,
+        platform,
+        game_name,
+        "GameServer.searchServers",
+        filter_json,
+    )
+    .await?;
 
     let default = &vec![];
-    let servers = result["result"]["gameservers"].as_array().unwrap_or(default);
+    let servers = result["result"]["gameservers"]
+        .as_array()
+        .unwrap_or(default);
 
     let mut region_amounts = results::RegionAmounts {
         server_amount: servers.len() as i64,
@@ -70,36 +90,75 @@ async fn region_players(region: &str, session: &String, game_name: &str, platfor
     let mut mode_amounts: HashMap<String, i64> = HashMap::new();
 
     for server in servers {
-        mode_amounts.entry(server["mapMode"].as_str().unwrap_or_default().to_string())
-            .and_modify(|count| *count += 1).or_insert(1);
+        mode_amounts
+            .entry(server["mapMode"].as_str().unwrap_or_default().to_string())
+            .and_modify(|count| *count += 1)
+            .or_insert(1);
 
-        map_amounts.entry(server["mapNamePretty"].as_str().unwrap_or_default().to_string())
-            .and_modify(|count| *count += 1).or_insert(1);
-        
-        
-        region_amounts.soldier_amount += server["slots"]["Soldier"]["current"].as_i64().unwrap_or_default();
-        region_amounts.queue_amount += server["slots"]["Queue"]["current"].as_i64().unwrap_or_default();
-        region_amounts.spectator_amount += server["slots"]["Spectator"]["current"].as_i64().unwrap_or_default();
-        if server["serverType"].as_str().unwrap_or_default() == "OFFICIAL" && server["game"].as_str().unwrap_or_default() == "tunguska" {
+        map_amounts
+            .entry(
+                server["mapNamePretty"]
+                    .as_str()
+                    .unwrap_or_default()
+                    .to_string(),
+            )
+            .and_modify(|count| *count += 1)
+            .or_insert(1);
+
+        region_amounts.soldier_amount += server["slots"]["Soldier"]["current"]
+            .as_i64()
+            .unwrap_or_default();
+        region_amounts.queue_amount += server["slots"]["Queue"]["current"]
+            .as_i64()
+            .unwrap_or_default();
+        region_amounts.spectator_amount += server["slots"]["Spectator"]["current"]
+            .as_i64()
+            .unwrap_or_default();
+        if server["serverType"].as_str().unwrap_or_default() == "OFFICIAL"
+            && server["game"].as_str().unwrap_or_default() == "tunguska"
+        {
             region_amounts.dice_server_amount += 1;
-            region_amounts.dice_soldier_amount += server["slots"]["Soldier"]["current"].as_i64().unwrap_or_default();
-            region_amounts.dice_queue_amount += server["slots"]["Queue"]["current"].as_i64().unwrap_or_default();
-            region_amounts.dice_spectator_amount += server["slots"]["Spectator"]["current"].as_i64().unwrap_or_default();
-        } else if server["ownerId"].as_str().is_none() && server["game"].as_str().unwrap_or_default() == "casablanca" {
+            region_amounts.dice_soldier_amount += server["slots"]["Soldier"]["current"]
+                .as_i64()
+                .unwrap_or_default();
+            region_amounts.dice_queue_amount += server["slots"]["Queue"]["current"]
+                .as_i64()
+                .unwrap_or_default();
+            region_amounts.dice_spectator_amount += server["slots"]["Spectator"]["current"]
+                .as_i64()
+                .unwrap_or_default();
+        } else if server["ownerId"].as_str().is_none()
+            && server["game"].as_str().unwrap_or_default() == "casablanca"
+        {
             region_amounts.dice_server_amount += 1;
-            region_amounts.dice_soldier_amount += server["slots"]["Soldier"]["current"].as_i64().unwrap_or_default();
-            region_amounts.dice_queue_amount += server["slots"]["Queue"]["current"].as_i64().unwrap_or_default();
-            region_amounts.dice_spectator_amount += server["slots"]["Spectator"]["current"].as_i64().unwrap_or_default();
+            region_amounts.dice_soldier_amount += server["slots"]["Soldier"]["current"]
+                .as_i64()
+                .unwrap_or_default();
+            region_amounts.dice_queue_amount += server["slots"]["Queue"]["current"]
+                .as_i64()
+                .unwrap_or_default();
+            region_amounts.dice_spectator_amount += server["slots"]["Spectator"]["current"]
+                .as_i64()
+                .unwrap_or_default();
         } else {
             region_amounts.community_server_amount += 1;
-            region_amounts.community_soldier_amount += server["slots"]["Soldier"]["current"].as_i64().unwrap_or_default();
-            region_amounts.community_queue_amount += server["slots"]["Queue"]["current"].as_i64().unwrap_or_default();
-            region_amounts.community_spectator_amount += server["slots"]["Spectator"]["current"].as_i64().unwrap_or_default();
+            region_amounts.community_soldier_amount += server["slots"]["Soldier"]["current"]
+                .as_i64()
+                .unwrap_or_default();
+            region_amounts.community_queue_amount += server["slots"]["Queue"]["current"]
+                .as_i64()
+                .unwrap_or_default();
+            region_amounts.community_spectator_amount += server["slots"]["Spectator"]["current"]
+                .as_i64()
+                .unwrap_or_default();
         }
     }
 
     Ok(results::RegionResult {
-        metadata: results::Metadata { region: region.to_string(), platform: platform.to_string() },
+        metadata: results::Metadata {
+            region: region.to_string(),
+            platform: platform.to_string(),
+        },
         amounts: region_amounts,
         maps: map_amounts,
         modes: mode_amounts,
@@ -109,17 +168,29 @@ async fn region_players(region: &str, session: &String, game_name: &str, platfor
     })
 }
 
-async fn get_region_stats(game_name: &str, old_session: String, cookie: bf_sparta::cookie::Cookie, platform: &str) -> anyhow::Result<(String, HashMap<String, results::RegionResult>)> {
-    let session = match sparta_api::check_gateway_session(cookie, &old_session, platform, game_name, "en-us").await {
-        Ok(session) => session,
-        Err(e) => anyhow::bail!("{} session failed: {:#?}", game_name, e),
-    };
+async fn get_region_stats(
+    game_name: &str,
+    old_session: String,
+    cookie: bf_sparta::cookie::Cookie,
+    platform: &str,
+) -> anyhow::Result<(String, HashMap<String, results::RegionResult>)> {
+    let session =
+        match sparta_api::check_gateway_session(cookie, &old_session, platform, game_name, "en-us")
+            .await
+        {
+            Ok(session) => session,
+            Err(e) => anyhow::bail!("{} session failed: {:#?}", game_name, e),
+        };
     let sparta_regions = vec!["EU", "Asia", "NAm", "SAm", "AU", "OC", "Afr", "AC"];
     let mut platform_result: HashMap<String, results::RegionResult> = HashMap::new();
     for region in sparta_regions {
         match region_players(region, &session.session_id, game_name, platform).await {
-            Ok(region_result) => {platform_result.insert(region_result.clone().metadata.region, region_result);},
-            Err(e) => {log::error!("{} {} region failed: {:#?}", region, game_name, e);},
+            Ok(region_result) => {
+                platform_result.insert(region_result.clone().metadata.region, region_result);
+            }
+            Err(e) => {
+                log::error!("{} {} region failed: {:#?}", region, game_name, e);
+            }
         };
     }
     let all_regions = results::combine_region_players("ALL", platform, &platform_result).await;
@@ -127,24 +198,43 @@ async fn get_region_stats(game_name: &str, old_session: String, cookie: bf_spart
     Ok((session.session_id, platform_result))
 }
 
-pub async fn gather_companion(mongo_client: &mut MongoClient, mut sessions: HashMap<String, String>, cookie: bf_sparta::cookie::Cookie, game_name: &str, frontend_game_name: &str) -> anyhow::Result<(HashMap<String, String>, results::RegionResult)> {
+pub async fn gather_companion(
+    mongo_client: &mut MongoClient,
+    mut sessions: HashMap<String, String>,
+    cookie: bf_sparta::cookie::Cookie,
+    game_name: &str,
+    frontend_game_name: &str,
+) -> anyhow::Result<(HashMap<String, String>, results::RegionResult)> {
     let game_platforms = match &game_name.to_string()[..] {
         "tunguska" => vec!["pc", "ps4", "xboxone"],
         "casablanca" => vec!["pc", "ps4", "xboxone"],
         "bf4" => vec!["ps4", "xboxone"],
         _ => vec!["pc"],
     };
-    
+
     let mut game_result: HashMap<String, HashMap<String, results::RegionResult>> = HashMap::new();
     for platform in game_platforms {
-        let (session, platform_result) = match get_region_stats(game_name, sessions.get(platform).unwrap_or(&"".to_string()).to_string(), cookie.clone(), platform).await {
+        let (session, platform_result) = match get_region_stats(
+            game_name,
+            sessions
+                .get(platform)
+                .unwrap_or(&"".to_string())
+                .to_string(),
+            cookie.clone(),
+            platform,
+        )
+        .await
+        {
             Ok((sessions, platform_result)) => {
-                match mongo_client.push_to_database(frontend_game_name, &platform_result).await {
-                    Ok(_) => {},
+                match mongo_client
+                    .push_to_database(frontend_game_name, &platform_result)
+                    .await
+                {
+                    Ok(_) => {}
                     Err(e) => log::error!("{} failed to push to influxdb: {:#?}", game_name, e),
                 };
                 (sessions, platform_result)
-            },
+            }
             Err(e) => anyhow::bail!("{} failed with platform {}: {:#?}", platform, game_name, e),
         };
         sessions.insert(platform.into(), session);
@@ -152,8 +242,11 @@ pub async fn gather_companion(mongo_client: &mut MongoClient, mut sessions: Hash
     }
 
     let combined_platform_regions = results::combine_region_platforms(&game_result).await;
-    match mongo_client.push_to_database(frontend_game_name, &combined_platform_regions).await {
-        Ok(_) => {},
+    match mongo_client
+        .push_to_database(frontend_game_name, &combined_platform_regions)
+        .await
+    {
+        Ok(_) => {}
         Err(e) => log::error!("{} failed to push to influxdb: {:#?}", game_name, e),
     };
     let result = match combined_platform_regions.get("ALL") {

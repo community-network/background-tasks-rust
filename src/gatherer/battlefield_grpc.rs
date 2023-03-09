@@ -1,17 +1,28 @@
-use std::collections::HashMap;
 use chrono::Utc;
-use grpc_rust::{grpc::KingstonClient, modules::{communitygames::{ServerPropertyFilters, GetFilteredGameServersRequest, GameFilters}, CommunityGames}};
+use grpc_rust::{
+    grpc::KingstonClient,
+    modules::{
+        communitygames::{GameFilters, GetFilteredGameServersRequest, ServerPropertyFilters},
+        CommunityGames,
+    },
+};
+use std::collections::HashMap;
 
 use crate::{mongo::MongoClient, structs::results};
 
-async fn get_region_stats(kingston_client: &KingstonClient) -> anyhow::Result<HashMap<String, results::RegionResult>> {
+async fn get_region_stats(
+    kingston_client: &KingstonClient,
+) -> anyhow::Result<HashMap<String, results::RegionResult>> {
     let grpc_regions = HashMap::from([
-        ("Asia", vec!["aws-bah", "aws-bom", "aws-hkg", "aws-nrt", "aws-sin"]),
+        (
+            "Asia",
+            vec!["aws-bah", "aws-bom", "aws-hkg", "aws-nrt", "aws-sin"],
+        ),
         ("NAm", vec!["aws-iad", "aws-pdx", "aws-sjc"]),
         ("SAm", vec!["aws-brz", "aws-cmh", "aws-icn"]),
         ("EU", vec!["aws-cdg", "aws-dub", "aws-fra", "aws-lhr"]),
         ("Afr", vec!["aws-cpt"]),
-        ("OC", vec!["aws-syd"])
+        ("OC", vec!["aws-syd"]),
     ]);
     let bf2042_maps = HashMap::from([
         ("MP_Harbor", "AricaHarbor"),
@@ -28,7 +39,8 @@ async fn get_region_stats(kingston_client: &KingstonClient) -> anyhow::Result<Ha
         ("MP_LongHaul", "Manifest"),
         ("MP_TheWall", "Renewal"),
         ("MP_Ridge", "Exposure"),
-        ("MP_LightsOut", "Spearhead")
+        ("MP_LightsOut", "Spearhead"),
+        ("MP_Boulder", "Flashpoint"),
     ]);
     let bf2042_modes = HashMap::from([
         ("ConquestSmall", "Conquest"),
@@ -48,8 +60,11 @@ async fn get_region_stats(kingston_client: &KingstonClient) -> anyhow::Result<Ha
     let mut regions: HashMap<String, results::RegionResult> = HashMap::new();
 
     for (region, aws_regions) in grpc_regions {
-        let mut region_stats: results::RegionResult = results::RegionResult { 
-            metadata: results::Metadata { region: region.to_string(), platform: "global".to_string() },
+        let mut region_stats: results::RegionResult = results::RegionResult {
+            metadata: results::Metadata {
+                region: region.to_string(),
+                platform: "global".to_string(),
+            },
             amounts: results::RegionAmounts {
                 server_amount: 0,
                 soldier_amount: 0,
@@ -88,24 +103,61 @@ async fn get_region_stats(kingston_client: &KingstonClient) -> anyhow::Result<Ha
                         }),
                         limit: 250,
                     },
-                ).await {
+                )
+                .await
+                {
                     Ok(servers) => {
                         for server in servers.servers {
                             region_stats.amounts.server_amount += 1;
-                            region_stats.amounts.soldier_amount += server.players.unwrap_or_default().player_amount as i64;
-                            region_stats.amounts.queue_amount += server.que.unwrap_or_default().in_que as i64;
-                            region_stats.maps.entry(bf2042_maps.get(&server.current_map[..]).unwrap_or(&"").to_string())
-                                .and_modify(|count| *count += 1).or_insert(1);
-                            region_stats.modes.entry(bf2042_modes.get(&server.mode[..]).unwrap_or(&"").to_string())
-                                .and_modify(|count| *count += 1).or_insert(1);
-                            region_stats.owner_platform.entry(bf2042_platform.get(&server.owner.unwrap_or_default().platform_id).unwrap_or(&"").to_string())
-                                .and_modify(|count| *count += 1).or_insert(1);
+                            region_stats.amounts.soldier_amount +=
+                                server.players.unwrap_or_default().player_amount as i64;
+                            region_stats.amounts.queue_amount +=
+                                server.que.unwrap_or_default().in_que as i64;
+                            region_stats
+                                .maps
+                                .entry(
+                                    bf2042_maps
+                                        .get(&server.current_map[..])
+                                        .unwrap_or(&"")
+                                        .to_string(),
+                                )
+                                .and_modify(|count| *count += 1)
+                                .or_insert(1);
+                            region_stats
+                                .modes
+                                .entry(
+                                    bf2042_modes
+                                        .get(&server.mode[..])
+                                        .unwrap_or(&"")
+                                        .to_string(),
+                                )
+                                .and_modify(|count| *count += 1)
+                                .or_insert(1);
+                            region_stats
+                                .owner_platform
+                                .entry(
+                                    bf2042_platform
+                                        .get(&server.owner.unwrap_or_default().platform_id)
+                                        .unwrap_or(&"")
+                                        .to_string(),
+                                )
+                                .and_modify(|count| *count += 1)
+                                .or_insert(1);
                             for setting in server.settings {
-                                region_stats.settings.entry(setting.param).and_modify(|count| *count += 1).or_insert(1);
+                                region_stats
+                                    .settings
+                                    .entry(setting.param)
+                                    .and_modify(|count| *count += 1)
+                                    .or_insert(1);
                             }
                         }
-                    },
-                    Err(e) => log::error!("{} kingston region failed with map {}: {:#?}", aws_region, map, e),
+                    }
+                    Err(e) => log::error!(
+                        "{} kingston region failed with map {}: {:#?}",
+                        aws_region,
+                        map,
+                        e
+                    ),
                 };
             }
         }
@@ -118,20 +170,25 @@ async fn get_region_stats(kingston_client: &KingstonClient) -> anyhow::Result<Ha
     Ok(regions)
 }
 
-pub async fn gather_grpc(mongo_client: &mut MongoClient, mut sessions: HashMap<String, String>, cookie: bf_sparta::cookie::Cookie) -> anyhow::Result<(HashMap<String, String>, results::RegionResult)> {
-    let mut kingston_client = KingstonClient::new(sessions.get("pc").unwrap_or(&"".to_string()).to_string()).await?;
+pub async fn gather_grpc(
+    mongo_client: &mut MongoClient,
+    mut sessions: HashMap<String, String>,
+    cookie: bf_sparta::cookie::Cookie,
+) -> anyhow::Result<(HashMap<String, String>, results::RegionResult)> {
+    let mut kingston_client =
+        KingstonClient::new(sessions.get("pc").unwrap_or(&"".to_string()).to_string()).await?;
     match kingston_client.auth(cookie.clone()).await {
-        Ok(_) => {},
+        Ok(_) => {}
         Err(e) => anyhow::bail!("kingston session failed: {:#?}", e),
     };
     let game_result = match get_region_stats(&kingston_client).await {
         Ok(result) => {
             match mongo_client.push_to_database("bf2042portal", &result).await {
-                Ok(_) => {},
+                Ok(_) => {}
                 Err(e) => log::error!("kingston failed to push to influxdb: {:#?}", e),
             };
             result
-        },
+        }
         Err(e) => anyhow::bail!("kingston gather failed: {:#?}", e),
     };
     sessions.insert("pc".into(), kingston_client.session_id);
