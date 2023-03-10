@@ -23,7 +23,7 @@ pub async fn gather_players(
         ))
         .headers(headers)
         .json(&json!({
-            "game_ids": managed_results.unmanaged_servers,
+            "game_ids": Vec::from_iter(managed_results.unmanaged_servers.keys()),
         }))
         .send()
         .await?;
@@ -35,9 +35,21 @@ pub async fn gather_players(
         .await?;
 
     for server in servers {
-        for result in server.values() {
+        for (game_id, result) in server {
             for player in result.players.keys() {
-                players.insert(player.to_string(), result.server_info.server_name.clone());
+                // add guid for bf2042
+                if game_name == "kingston" {
+                    players.insert(
+                        player.to_string(),
+                        managed_results
+                            .unmanaged_servers
+                            .get(&game_id)
+                            .unwrap_or(&"game_id".to_string())
+                            .to_string(),
+                    );
+                } else {
+                    players.insert(player.to_string(), game_id.to_string());
+                }
             }
         }
     }

@@ -13,7 +13,10 @@ use crate::{mongo::MongoClient, structs::results};
 async fn get_region_stats(
     kingston_client: &KingstonClient,
     managed_server_ids: &[String],
-) -> anyhow::Result<(HashMap<String, results::RegionResult>, results::ManagedInfo)> {
+) -> anyhow::Result<(
+    HashMap<String, results::RegionResult>,
+    HashMap<String, String>,
+)> {
     let grpc_regions = HashMap::from([
         (
             "Asia",
@@ -59,9 +62,7 @@ async fn get_region_stats(
     ]);
 
     let mut region_result: HashMap<String, results::RegionResult> = HashMap::new();
-    let mut managed_result = results::ManagedInfo {
-        unmanaged_servers: vec![],
-    };
+    let mut all_unmanaged_players: HashMap<String, String> = HashMap::new();
 
     for (region, aws_regions) in grpc_regions {
         let mut region_stats: results::RegionResult = results::RegionResult {
@@ -90,6 +91,10 @@ async fn get_region_stats(
             timestamp: Utc::now(),
         };
 
+        let mut managed_result = results::ManagedInfo {
+            unmanaged_servers: HashMap::new(),
+        };
+
         for aws_region in aws_regions {
             for map in bf2042_maps.keys() {
                 match CommunityGames::get_filtered_game_servers(
@@ -114,8 +119,13 @@ async fn get_region_stats(
                         for server in servers.servers {
                             if let Some(game_id) = server.bid {
                                 let blaze_id = game_id.blaze_game_id;
-                                if !managed_server_ids.contains(&blaze_id.to_string()) {
-                                    managed_result.unmanaged_servers.push(blaze_id)
+                                if blaze_id != 0 {
+                                    // add unmanaged as well
+                                    // if !managed_server_ids.contains(&blaze_id.to_string()) {
+                                    managed_result
+                                        .unmanaged_servers
+                                        .insert(blaze_id, server.server_id);
+                                    // }
                                 }
                             }
 
@@ -173,12 +183,16 @@ async fn get_region_stats(
             }
         }
 
+        let unmanaged_players =
+            super::gateway_players::gather_players("kingston", managed_result).await?;
+        all_unmanaged_players.extend::<HashMap<String, String>>(unmanaged_players);
+
         region_result.insert(region.to_string(), region_stats);
     }
 
     let all_regions = results::combine_region_players("ALL", "global", &region_result).await;
     region_result.insert("ALL".to_string(), all_regions);
-    Ok((region_result, managed_result))
+    Ok((region_result, all_unmanaged_players))
 }
 
 pub async fn gather_grpc(
@@ -193,14 +207,11 @@ pub async fn gather_grpc(
         Ok(_) => {}
         Err(e) => anyhow::bail!("kingston session failed: {:#?}", e),
     };
-    let mut managed_results = results::ManagedInfo {
-        unmanaged_servers: vec![],
-    };
     let game_result = match get_region_stats(&kingston_client, managed_server_ids).await {
-        Ok((result, managed_result)) => {
-            managed_results
-                .unmanaged_servers
-                .append(&mut managed_result.unmanaged_servers.clone());
+        Ok((result, all_unmanaged_players)) => {
+            mongo_client
+                .push_unmanaged_players("kingston", all_unmanaged_players)
+                .await?;
             match mongo_client.push_to_database("bf2042portal", &result).await {
                 Ok(_) => {}
                 Err(e) => log::error!("kingston failed to push to influxdb: {:#?}", e),
@@ -214,12 +225,6 @@ pub async fn gather_grpc(
         Some(result) => result,
         None => anyhow::bail!("kingston has no ALL region!"),
     };
-
-    let unmanaged_players =
-        super::gateway_players::gather_players("kingston", managed_results).await?;
-    mongo_client
-        .push_unmanaged_players("kingston", unmanaged_players)
-        .await?;
 
     Ok((sessions, result.to_owned()))
 }

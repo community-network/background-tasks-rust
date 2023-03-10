@@ -91,7 +91,7 @@ async fn region_players(
     let mut mode_amounts: HashMap<String, i64> = HashMap::new();
 
     let mut managed_result = results::ManagedInfo {
-        unmanaged_servers: vec![],
+        unmanaged_servers: HashMap::new(),
     };
 
     for server in servers {
@@ -103,7 +103,7 @@ async fn region_players(
         if !managed_server_ids.contains(&game_id) && server_soldier_amount > 0 {
             managed_result
                 .unmanaged_servers
-                .push(game_id.parse::<i64>().unwrap());
+                .insert(game_id.parse::<i64>().unwrap(), game_id);
         }
 
         mode_amounts
@@ -194,7 +194,7 @@ async fn get_region_stats(
     let sparta_regions = vec!["EU", "Asia", "NAm", "SAm", "AU", "OC", "Afr", "AC"];
     let mut platform_result: HashMap<String, results::RegionResult> = HashMap::new();
     let mut managed_results = results::ManagedInfo {
-        unmanaged_servers: vec![],
+        unmanaged_servers: HashMap::new(),
     };
     for region in sparta_regions {
         match region_players(
@@ -209,7 +209,7 @@ async fn get_region_stats(
             Ok((region_result, managed_result)) => {
                 managed_results
                     .unmanaged_servers
-                    .append(&mut managed_result.unmanaged_servers.clone());
+                    .extend::<HashMap<i64, String>>(managed_result.unmanaged_servers.into());
                 platform_result.insert(region_result.clone().metadata.region, region_result);
             }
             Err(e) => {

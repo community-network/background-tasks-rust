@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
 pub struct ManagedInfo {
-    pub unmanaged_servers: Vec<i64>,
+    pub unmanaged_servers: HashMap<i64, String>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
