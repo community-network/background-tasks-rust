@@ -85,6 +85,7 @@ async fn main() -> anyhow::Result<()> {
 
         let mut game_results: HashMap<String, results::RegionResult> = HashMap::new();
         let mut failed_games: Vec<&str> = vec![];
+        let managed_server_ids = &mongo_client.get_manager_game_ids().await?;
 
         let old_games = HashMap::from([
             ("bf2-playbf2", "playbf2"),
@@ -117,6 +118,7 @@ async fn main() -> anyhow::Result<()> {
                 cookie.clone(),
                 key,
                 value,
+                managed_server_ids,
             )
             .await
             {
@@ -163,6 +165,7 @@ async fn main() -> anyhow::Result<()> {
                 .unwrap_or(&empty_game_hash)
                 .to_owned(),
             cookie.clone(),
+            managed_server_ids,
         )
         .await
         {

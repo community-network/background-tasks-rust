@@ -3,6 +3,7 @@ use crate::structs::results;
 use bf_sparta::cookie::Cookie;
 use bson::Document;
 use chrono::{DateTime, Utc};
+use futures::TryStreamExt;
 use mongodb::error::Result;
 use mongodb::results::InsertOneResult;
 use mongodb::{options::ReplaceOptions, results::UpdateResult, Client, Collection, Database};
@@ -13,6 +14,8 @@ pub struct MongoClient {
     pub backend_cookies: Collection<BackendCookie>,
     pub community_servers: Collection<Document>,
     pub community_groups: Collection<Document>,
+    pub community_players: Collection<Document>,
+    pub unmanaged_players: Collection<results::UnmanagedPlayers>,
     pub player_list: Collection<Document>,
     pub logging: Collection<Document>,
     pub old_games_servers: Collection<old_games::OldGameServerList>,
@@ -75,6 +78,8 @@ impl MongoClient {
             backend_cookies: db.collection("backendCookies"),
             community_servers: db.collection("communityServers"),
             community_groups: db.collection("communityGroups"),
+            community_players: db.collection("communityPlayers"),
+            unmanaged_players: db.collection("unmanagedPlayers"),
             player_list: db.collection("playerList"),
             logging: db.collection("logging"),
             old_games_servers: gamestats_db.collection("oldGamesServerList"),
@@ -152,6 +157,50 @@ impl MongoClient {
         self.backend_cookies
             .replace_one(bson::doc! {"_id": format!("main-{}", id)}, cookie, options)
             .await
+    }
+
+    pub async fn get_manager_game_ids(&mut self) -> anyhow::Result<Vec<String>> {
+        let mut cursor = self
+            .community_players
+            .find(bson::doc! {"gameId":{"$exists": 1}}, None)
+            .await?;
+        let mut game_ids = vec![];
+        while let Some(doc) = cursor.try_next().await? {
+            game_ids.push(doc.get_str("gameId")?.to_string());
+        }
+        Ok(game_ids)
+    }
+
+    pub async fn push_unmanaged_players(
+        &mut self,
+        game_name: &str,
+        unmanaged_players: HashMap<String, String>,
+    ) -> anyhow::Result<()> {
+        let options = ReplaceOptions::builder().upsert(true).build();
+        match self
+            .unmanaged_players
+            .replace_one(
+                bson::doc! {"_id": game_name},
+                results::UnmanagedPlayers {
+                    _id: game_name.to_string(),
+                    players: unmanaged_players,
+                    timestamp: Utc::now(),
+                },
+                options,
+            )
+            .await
+        {
+            Ok(_) => {}
+            Err(e) => {
+                log::error!(
+                    "Failed to push {} for unmanaged players to mongodb: {:#?}",
+                    game_name,
+                    e
+                );
+            }
+        };
+
+        Ok(())
     }
 
     pub async fn get_cookies(&mut self, acc_email: &str) -> anyhow::Result<Cookie> {

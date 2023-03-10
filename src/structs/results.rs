@@ -2,6 +2,18 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
+pub struct ManagedInfo {
+    pub unmanaged_servers: Vec<i64>,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct UnmanagedPlayers {
+    pub _id: String,
+    pub players: HashMap<String, String>,
+    #[serde(with = "bson::serde_helpers::chrono_datetime_as_bson_datetime")]
+    pub timestamp: DateTime<Utc>,
+}
+
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct RegionAmounts {
     #[serde(rename = "serverAmount")]
