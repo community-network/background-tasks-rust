@@ -8,7 +8,7 @@ use grpc_rust::{
 };
 use std::collections::HashMap;
 
-use crate::{mongo::MongoClient, structs::results};
+use crate::{connectors::mongo::MongoClient, structs::results};
 
 async fn get_region_stats(
     kingston_client: &KingstonClient,

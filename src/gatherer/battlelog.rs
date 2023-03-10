@@ -4,7 +4,7 @@ use reqwest::header::HeaderMap;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
-use crate::{mongo::MongoClient, structs::results};
+use crate::{connectors::mongo::MongoClient, structs::results};
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 struct BattlelogServer {

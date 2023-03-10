@@ -1,4 +1,4 @@
-use crate::{mongo::MongoClient, structs::results};
+use crate::{connectors::mongo::MongoClient, structs::results};
 use chrono::Utc;
 use std::collections::HashMap;
 

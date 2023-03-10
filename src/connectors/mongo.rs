@@ -5,7 +5,6 @@ use bson::Document;
 use chrono::{DateTime, Utc};
 use futures::TryStreamExt;
 use mongodb::error::Result;
-use mongodb::results::InsertOneResult;
 use mongodb::{options::ReplaceOptions, results::UpdateResult, Client, Collection, Database};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -88,8 +87,8 @@ impl MongoClient {
         })
     }
 
-    pub async fn gather_managerinfo(&mut self) -> Result<InsertOneResult> {
-        let result = &ManagerInfo {
+    pub async fn gather_managerinfo(&mut self) -> Result<ManagerInfo> {
+        let result = ManagerInfo {
             groups_count: self
                 .community_groups
                 .count_documents(None, None)
@@ -139,7 +138,8 @@ impl MongoClient {
         };
 
         let collection: Collection<ManagerInfo> = self.graphing_db.collection("manager_info");
-        collection.insert_one(result, None).await
+        collection.insert_one(&result, None).await?;
+        Ok(result)
     }
 
     pub async fn push_new_cookies(

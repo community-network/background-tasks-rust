@@ -1,11 +1,12 @@
+mod connectors;
 mod gatherer;
-mod mongo;
 mod structs;
 
 use bf_sparta::{cookie_request, sparta_api};
 use chrono::Utc;
+use connectors::mongo::MongoClient;
 use gatherer::{battlefield_grpc, battlelog, companion, old_games};
-use mongo::MongoClient;
+use influxdb2::Client;
 use std::{
     collections::HashMap,
     sync::{atomic, Arc},
@@ -43,6 +44,11 @@ async fn main() -> anyhow::Result<()> {
         warp::serve(hello).run(([0, 0, 0, 0], 3030)).await;
     });
 
+    let influx_client = Client::new(
+        "https://europe-west1-1.gcp.cloud2.influxdata.com",
+        "Gametools network",
+        "uWe8oo4ykDMatlYX2g_mJWt3jitcxIOaJU9rNaJUZGQuLPmi0KL_eIS8QqHq9EEjLkNTOoRdnZMFdARuzOIigw==",
+    );
     let mut mongo_client = MongoClient::connect().await?;
 
     let mut cookie = match mongo_client.get_cookies("api4@gametools.network").await {
@@ -79,7 +85,14 @@ async fn main() -> anyhow::Result<()> {
 
     loop {
         match mongo_client.gather_managerinfo().await {
-            Ok(_) => {}
+            Ok(result) => {
+                match gatherer::server_manager::save_server_manager_info(&influx_client, result)
+                    .await
+                {
+                    Ok(_) => todo!(),
+                    Err(e) => log::error!("Failed to send new manager info to influxdb {:#?}", e),
+                };
+            }
             Err(e) => log::error!("Failed to send new manager info {:#?}", e),
         };
 

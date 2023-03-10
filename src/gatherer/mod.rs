@@ -3,3 +3,4 @@ pub mod battlelog;
 pub mod companion;
 pub mod gateway_players;
 pub mod old_games;
+pub mod server_manager;
