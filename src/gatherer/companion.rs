@@ -1,4 +1,5 @@
 use crate::{
+    connectors::influx_db,
     structs::{
         companion::{Regions, ServerFilter, Slots, UnusedValue},
         results,
@@ -232,6 +233,7 @@ async fn get_region_stats(
 }
 
 pub async fn gather_companion(
+    influx_client: &influxdb2::Client,
     mongo_client: &mut MongoClient,
     mut sessions: HashMap<String, String>,
     cookie: bf_sparta::cookie::Cookie,
@@ -262,12 +264,26 @@ pub async fn gather_companion(
         .await
         {
             Ok((sessions, platform_result)) => {
+                // influx
+                match influx_db::push_to_database(
+                    influx_client,
+                    frontend_game_name,
+                    platform,
+                    &platform_result,
+                )
+                .await
+                {
+                    Ok(_) => {}
+                    Err(e) => log::error!("{} failed to push to influxdb: {:#?}", game_name, e),
+                };
+
+                // mongo
                 match mongo_client
                     .push_to_database(frontend_game_name, &platform_result)
                     .await
                 {
                     Ok(_) => {}
-                    Err(e) => log::error!("{} failed to push to influxdb: {:#?}", game_name, e),
+                    Err(e) => log::error!("{} failed to push to mongodb: {:#?}", game_name, e),
                 };
                 (sessions, platform_result)
             }
@@ -278,13 +294,28 @@ pub async fn gather_companion(
     }
 
     let combined_platform_regions = results::combine_region_platforms(&game_result).await;
+    // influx
+    match influx_db::push_to_database(
+        influx_client,
+        frontend_game_name,
+        "global",
+        &combined_platform_regions,
+    )
+    .await
+    {
+        Ok(_) => {}
+        Err(e) => log::error!("{} failed to push to influxdb: {:#?}", game_name, e),
+    };
+
+    // mongo
     match mongo_client
         .push_to_database(frontend_game_name, &combined_platform_regions)
         .await
     {
         Ok(_) => {}
-        Err(e) => log::error!("{} failed to push to influxdb: {:#?}", game_name, e),
+        Err(e) => log::error!("{} failed to push to mongodb: {:#?}", game_name, e),
     };
+
     let result = match combined_platform_regions.get("ALL") {
         Some(result) => result,
         None => anyhow::bail!("{} has no ALL region!", game_name),

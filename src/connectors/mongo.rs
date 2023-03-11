@@ -137,8 +137,8 @@ impl MongoClient {
             timestamp: Utc::now(),
         };
 
-        let collection: Collection<ManagerInfo> = self.graphing_db.collection("manager_info");
-        collection.insert_one(&result, None).await?;
+        // let collection: Collection<ManagerInfo> = self.graphing_db.collection("manager_info");
+        // collection.insert_one(&result, None).await?;
         Ok(result)
     }
 
@@ -216,21 +216,21 @@ impl MongoClient {
         frontend_game_name: &str,
         platform_result: &HashMap<String, results::RegionResult>,
     ) -> anyhow::Result<()> {
-        let collection: Collection<results::RegionResult> =
-            self.graphing_db.collection(frontend_game_name);
-        for (key, value) in platform_result {
-            match collection.insert_one(value, None).await {
-                Ok(_) => {}
-                Err(e) => {
-                    log::error!(
-                        "Failed to push {} for {} to mongodb: {:#?}",
-                        key,
-                        frontend_game_name,
-                        e
-                    );
-                }
-            };
-        }
+        // let collection: Collection<results::RegionResult> =
+        //     self.graphing_db.collection(frontend_game_name);
+        // for (key, value) in platform_result {
+        //     match collection.insert_one(value, None).await {
+        //         Ok(_) => {}
+        //         Err(e) => {
+        //             log::error!(
+        //                 "Failed to push {} for {} to mongodb: {:#?}",
+        //                 key,
+        //                 frontend_game_name,
+        //                 e
+        //             );
+        //         }
+        //     };
+        // }
         Ok(())
     }
 
@@ -246,14 +246,14 @@ impl MongoClient {
         frontend_game_name: &str,
         game_result: results::OldGameResult,
     ) -> anyhow::Result<()> {
-        let collection: Collection<results::OldGameResult> =
-            self.graphing_db.collection(frontend_game_name);
-        match collection.insert_one(game_result, None).await {
-            Ok(_) => {}
-            Err(e) => {
-                log::error!("Failed to push {} to mongodb: {:#?}", frontend_game_name, e);
-            }
-        };
+        // let collection: Collection<results::OldGameResult> =
+        //     self.graphing_db.collection(frontend_game_name);
+        // match collection.insert_one(game_result, None).await {
+        //     Ok(_) => {}
+        //     Err(e) => {
+        //         log::error!("Failed to push {} to mongodb: {:#?}", frontend_game_name, e);
+        //     }
+        // };
         Ok(())
     }
 

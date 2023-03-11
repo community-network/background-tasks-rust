@@ -4,7 +4,10 @@ use reqwest::header::HeaderMap;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
-use crate::{connectors::mongo::MongoClient, structs::results};
+use crate::{
+    connectors::{influx_db, mongo::MongoClient},
+    structs::results,
+};
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 struct BattlelogServer {
@@ -229,12 +232,20 @@ async fn get_region_stats(
 }
 
 pub async fn gather_battlelog(
+    influx_client: &influxdb2::Client,
     mongo_client: &mut MongoClient,
     game_name: &str,
     base_uri: &str,
 ) -> anyhow::Result<results::RegionResult> {
     let game_result = match get_region_stats(game_name, base_uri).await {
         Ok(result) => {
+            // influx
+            match influx_db::push_to_database(influx_client, game_name, "pc", &result).await {
+                Ok(_) => {}
+                Err(e) => log::error!("{} failed to push to influxdb: {:#?}", game_name, e),
+            };
+
+            // mongo
             match mongo_client.push_to_database(game_name, &result).await {
                 Ok(_) => {}
                 Err(e) => log::error!("{} failed to push to influxdb: {:#?}", game_name, e),

@@ -15,7 +15,7 @@ pub async fn save_server_manager_info(
     influx_client: &influxdb2::Client,
     manager_info: ManagerInfo,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let bucket = "bfStatus";
+    let bucket = "Game info";
     let points = vec![
         build_data_point("communityGroups", manager_info.groups_count)?,
         build_data_point("communityServers", manager_info.server_count)?,

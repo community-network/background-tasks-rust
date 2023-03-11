@@ -25,7 +25,7 @@ pub async fn push_to_database(
     platform: &str,
     platform_result: &HashMap<String, results::RegionResult>,
 ) -> anyhow::Result<()> {
-    let bucket = "bfStatus";
+    let bucket = "Game info";
     for (key, value) in platform_result {
         let mut points = vec![
             build_data_point(
@@ -178,9 +178,9 @@ pub async fn push_to_database(
 
 pub async fn push_totals(
     influx_client: &influxdb2::Client,
-    global_result: results::RegionResult,
+    global_result: &results::RegionResult,
 ) -> anyhow::Result<()> {
-    let bucket = "bfStatus";
+    let bucket = "Game info";
     let points = vec![
         build_data_point(
             "global",

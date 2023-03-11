@@ -8,7 +8,10 @@ use grpc_rust::{
 };
 use std::collections::HashMap;
 
-use crate::{connectors::mongo::MongoClient, structs::results};
+use crate::{
+    connectors::{influx_db, mongo::MongoClient},
+    structs::results,
+};
 
 async fn get_region_stats(
     kingston_client: &KingstonClient,
@@ -196,6 +199,7 @@ async fn get_region_stats(
 }
 
 pub async fn gather_grpc(
+    influx_client: &influxdb2::Client,
     mongo_client: &mut MongoClient,
     mut sessions: HashMap<String, String>,
     cookie: bf_sparta::cookie::Cookie,
@@ -212,6 +216,16 @@ pub async fn gather_grpc(
             mongo_client
                 .push_unmanaged_players("kingston", all_unmanaged_players)
                 .await?;
+
+            // influx
+            match influx_db::push_to_database(influx_client, "bf2042portal", "global", &result)
+                .await
+            {
+                Ok(_) => {}
+                Err(e) => log::error!("kingston failed to push to influxdb: {:#?}", e),
+            };
+
+            // mongo
             match mongo_client.push_to_database("bf2042portal", &result).await {
                 Ok(_) => {}
                 Err(e) => log::error!("kingston failed to push to influxdb: {:#?}", e),

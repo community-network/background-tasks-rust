@@ -15,6 +15,8 @@ use structs::results;
 use tokio::time::{sleep, Duration};
 use warp::Filter;
 
+use crate::connectors::influx_db;
+
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     let last_update = Arc::new(atomic::AtomicI64::new(Utc::now().timestamp() / 60));
@@ -45,9 +47,9 @@ async fn main() -> anyhow::Result<()> {
     });
 
     let influx_client = Client::new(
-        "https://europe-west1-1.gcp.cloud2.influxdata.com",
-        "Gametools network",
-        "uWe8oo4ykDMatlYX2g_mJWt3jitcxIOaJU9rNaJUZGQuLPmi0KL_eIS8QqHq9EEjLkNTOoRdnZMFdARuzOIigw==",
+        "http://167.86.108.125:8086/",
+        "Gametools",
+        "UxRdmaqZyX6HyNQ4-so2Fvnf-TuAzbSnJc2y1uYZQhmx4h3OX2k03bu4xm6uEU5ssdP4YZri86QiXNKr6oO7ZQ==",
     );
     let mut mongo_client = MongoClient::connect().await?;
 
@@ -89,7 +91,7 @@ async fn main() -> anyhow::Result<()> {
                 match gatherer::server_manager::save_server_manager_info(&influx_client, result)
                     .await
                 {
-                    Ok(_) => todo!(),
+                    Ok(_) => {}
                     Err(e) => log::error!("Failed to send new manager info to influxdb {:#?}", e),
                 };
             }
@@ -111,7 +113,7 @@ async fn main() -> anyhow::Result<()> {
             ("bfvietnam-openspy", "openspy"),
         ]);
         for (key, value) in old_games.into_iter() {
-            match old_games::push_old_games(&mut mongo_client, key, value).await {
+            match old_games::push_old_games(&influx_client, &mut mongo_client, key, value).await {
                 Ok(game_result) => {
                     game_results.insert(key.to_string(), game_result);
                 }
@@ -126,6 +128,7 @@ async fn main() -> anyhow::Result<()> {
             HashMap::from([("tunguska", "bf1"), ("casablanca", "bfv"), ("bf4", "bf4")]);
         for (key, value) in sparta_games.into_iter() {
             match companion::gather_companion(
+                &influx_client,
                 &mut mongo_client,
                 sessions.get(key).unwrap_or(&empty_game_hash).to_owned(),
                 cookie.clone(),
@@ -161,7 +164,7 @@ async fn main() -> anyhow::Result<()> {
             ),
         ]);
         for (key, value) in battlelog_games {
-            match battlelog::gather_battlelog(&mut mongo_client, key, value).await {
+            match battlelog::gather_battlelog(&influx_client, &mut mongo_client, key, value).await {
                 Ok(game_result) => {
                     game_results.insert(key.to_string(), game_result);
                 }
@@ -172,6 +175,7 @@ async fn main() -> anyhow::Result<()> {
             };
         }
         match battlefield_grpc::gather_grpc(
+            &influx_client,
             &mut mongo_client,
             sessions
                 .get("kingston")
@@ -200,6 +204,14 @@ async fn main() -> anyhow::Result<()> {
         } else {
             let global_result =
                 results::combine_region_players("global", "global", &game_results).await;
+
+            // influx
+            match influx_db::push_totals(&influx_client, &global_result).await {
+                Ok(_) => log::info!("successfully made global array"),
+                Err(e) => log::error!("Failed to push global games array: {:#?}", e),
+            };
+
+            // mongo
             match mongo_client.push_totals(global_result).await {
                 Ok(_) => log::info!("successfully made global array"),
                 Err(e) => log::error!("Failed to push global games array: {:#?}", e),
