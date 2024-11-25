@@ -1,0 +1,60 @@
+[package]
+name = "background-tasks-rust"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+anyhow = "1.0"
+mongodb = "3.1"
+futures = "0.3"
+chrono = "0.4"
+influxdb2 = "0.5"
+influxdb2-structmap = "0.2"
+num-traits = "0.2"
+serde_json = "1.0"
+log = "0.4"
+flexi_logger = "0.29"
+serde_derive = "1.0"
+questdb-rs = "4.0"
+sqlx = { version = "0.8", features = ["runtime-tokio", "postgres", "time"] }
+time = { version = "0.3", features = ["macros", "rand"] }
+regex = "1.11"
+dotenvy = "0.15"
+
+[dependencies.clickhouse]
+version = "0.13"
+features = ["time"]
+
+[dependencies.serde]
+version = "1.0"
+features = ["derive"]
+
+[dependencies.warp]
+version = "0.3"
+features = ["tls"]
+
+[dependencies.bson]
+version = "2.13"
+features = ["chrono-0_4"]
+
+[dependencies.tokio]
+version = "1.41"
+features = ["full"]
+
+[dependencies.bf_sparta]
+git = "https://github.com/Community-network/sparta-rust"
+branch = "main"
+
+[dependencies.grpc-rust]
+git = "https://github.com/community-network/grpc-rust"
+branch = "main"
+
+[dependencies.reqwest]
+version = "0.12"
+default-features = false
+features = ["rustls-tls", "json"]
+
+[profile.dev.package.sqlx-macros]
+opt-level = 3
