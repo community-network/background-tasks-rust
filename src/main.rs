@@ -5,7 +5,12 @@ mod structs;
 use crate::connectors::influx_db;
 use bf_sparta::{cookie_request, sparta_api};
 use connectors::mongo::MongoClient;
-use gatherer::{battlebit, battlefield_grpc, battlelog, companion, marne, old_games};
+use gatherer::{
+    battlebit,
+    battlefield_grpc::{self, check_session},
+    battlelog, companion, marne, old_games,
+};
+use grpc_rust::access_token::ea_desktop_access_token;
 use influxdb2::Client;
 use sqlx::postgres::PgPool;
 use std::{
@@ -65,14 +70,48 @@ async fn main() -> anyhow::Result<()> {
     let pool = PgPool::connect(&env::var("DATABASE_URL").expect("DATABASE_URL wasn't set")).await?;
 
     let api_main_account = env::var("API_MAIN_ACCOUNT").expect("API_MAIN_ACCOUNT wasn't set");
+    let api_bf2042_account = env::var("API_BF2042_ACCOUNT").expect("API_BF2042_ACCOUNT wasn't set");
 
-    let mut cookie = match mongo_client.get_cookies(&api_main_account).await {
+    let (mut cookie, _) = match mongo_client.get_cookies(&api_main_account).await {
         Ok(result) => result,
-        Err(_) => bf_sparta::cookie::Cookie {
-            sid: "".to_string(),
-            remid: "".to_string(),
-        },
+        Err(e) => {
+            log::warn!("Cookie failed, {}", e);
+            (
+                bf_sparta::cookie::Cookie {
+                    sid: "".to_string(),
+                    remid: "".to_string(),
+                },
+                "".to_string(),
+            )
+        }
     };
+
+    let (mut bf2042_cookie, mut ea_access_token) =
+        match mongo_client.get_cookies(&api_bf2042_account).await {
+            Ok(result) => result,
+            Err(e) => {
+                log::warn!("Cookie failed, {}", e);
+                (
+                    bf_sparta::cookie::Cookie {
+                        sid: "".to_string(),
+                        remid: "".to_string(),
+                    },
+                    "".to_string(),
+                )
+            }
+        };
+
+    if ea_access_token.is_empty() {
+        match ea_desktop_access_token(bf2042_cookie.clone()).await {
+            Ok(res) => {
+                (ea_access_token, bf2042_cookie) = res;
+                mongo_client
+                    .push_new_cookies(&api_bf2042_account, &bf2042_cookie, ea_access_token.clone())
+                    .await?;
+            }
+            Err(e) => log::error!("access_token for ea desktop failed: {:#?}", e),
+        };
+    }
 
     cookie = match sparta_api::get_token(cookie.clone(), "pc", "tunguska", "en-us").await {
         Ok(_) => cookie.clone(),
@@ -89,7 +128,7 @@ async fn main() -> anyhow::Result<()> {
                 remid: cookie_auth.remid,
             };
             mongo_client
-                .push_new_cookies(&api_main_account, &cookie)
+                .push_new_cookies(&api_main_account, &cookie, "".to_string())
                 .await?;
             cookie
         }
@@ -225,8 +264,9 @@ async fn main() -> anyhow::Result<()> {
                     .get("kingston")
                     .unwrap_or(&empty_game_hash)
                     .to_owned(),
-                cookie.clone(),
+                bf2042_cookie.clone(),
                 run_detailed,
+                ea_access_token.clone(),
             )
             .await
             {
@@ -236,6 +276,19 @@ async fn main() -> anyhow::Result<()> {
                 }
                 Err(e) => {
                     log::error!("Failed kingston_grpc, with reason: {:#?}", e);
+                    match ea_desktop_access_token(bf2042_cookie.clone()).await {
+                        Ok(res) => {
+                            (ea_access_token, bf2042_cookie) = res;
+                            mongo_client
+                                .push_new_cookies(
+                                    &api_bf2042_account,
+                                    &bf2042_cookie,
+                                    ea_access_token.clone(),
+                                )
+                                .await?;
+                        }
+                        Err(e) => log::error!("access_token for ea desktop failed: {:#?}", e),
+                    };
                     failed_games.push("kingston");
                 }
             };
@@ -287,6 +340,37 @@ async fn main() -> anyhow::Result<()> {
                 "Waiting {:#?} minutes before next run",
                 (ten_mins - last_ran).num_minutes()
             );
+            match check_session(
+                sessions
+                    .get("kingston")
+                    .unwrap_or(&empty_game_hash)
+                    .to_owned(),
+                bf2042_cookie.clone(),
+                ea_access_token.clone(),
+            )
+            .await
+            {
+                Ok(session) => {
+                    sessions.insert("kingston".to_string(), session);
+                    log::info!("kingston: Finished auth check!");
+                }
+                Err(e) => {
+                    log::error!("Failed kingston_grpc, auth_check reason: {:#?}", e);
+                    match ea_desktop_access_token(bf2042_cookie.clone()).await {
+                        Ok(res) => {
+                            (ea_access_token, bf2042_cookie) = res;
+                            mongo_client
+                                .push_new_cookies(
+                                    &api_bf2042_account,
+                                    &bf2042_cookie,
+                                    ea_access_token.clone(),
+                                )
+                                .await?;
+                        }
+                        Err(e) => log::error!("access_token for ea desktop failed: {:#?}", e),
+                    };
+                }
+            };
             sleep(Duration::from_secs(30)).await;
         }
     }

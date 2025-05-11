@@ -22,6 +22,7 @@ pub struct BackendCookie {
     pub _id: String,
     pub sid: String,
     pub remid: String,
+    pub ea_access_token: Option<String>,
 }
 
 impl From<BackendCookie> for Cookie {
@@ -138,12 +139,14 @@ impl MongoClient {
         &mut self,
         acc_email: &str,
         cookie: &Cookie,
+        ea_access_token: String,
     ) -> Result<UpdateResult> {
         let id = acc_email.split('@').collect::<Vec<&str>>()[0];
         let cookie = BackendCookie {
             _id: format!("main-{}", id),
             sid: cookie.sid.clone(),
             remid: cookie.remid.clone(),
+            ea_access_token: Some(ea_access_token.clone()),
         };
         let options = ReplaceOptions::builder().upsert(true).build();
         self.backend_cookies
@@ -152,12 +155,15 @@ impl MongoClient {
             .await
     }
 
-    pub async fn get_cookies(&mut self, acc_email: &str) -> anyhow::Result<Cookie> {
+    pub async fn get_cookies(&mut self, acc_email: &str) -> anyhow::Result<(Cookie, String)> {
         let backend_cookie = match self.backend_cookies.find_one(bson::doc! {"_id": format!("main-{}", acc_email.split('@').collect::<Vec<&str>>()[0])}).await? {
             Some(result) => result,
             None => anyhow::bail!("no cookie"),
         };
-        Ok(backend_cookie.into())
+        Ok((
+            backend_cookie.clone().into(),
+            backend_cookie.ea_access_token.unwrap_or_default(),
+        ))
     }
 
     pub async fn gather_old_title(

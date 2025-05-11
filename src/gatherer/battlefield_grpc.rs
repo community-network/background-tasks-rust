@@ -18,6 +18,59 @@ use crate::{
     structs::{results, server_info},
 };
 
+pub async fn check_session(
+    mut sessions: HashMap<String, String>,
+    cookie: bf_sparta::cookie::Cookie,
+    ea_access_token: String,
+) -> anyhow::Result<HashMap<String, String>> {
+    let mut kingston_client =
+        KingstonClient::new(sessions.get("pc").unwrap_or(&"".to_string()).to_string()).await?;
+    match kingston_client
+        .ea_desktop_auth(cookie.clone(), ea_access_token)
+        .await
+    {
+        Ok(_) => {}
+        Err(e) => anyhow::bail!("kingston session failed: {:#?}", e),
+    };
+    let servers = CommunityGames::get_filtered_game_servers(
+        &kingston_client,
+        GetFilteredGameServersRequest {
+            game_filters: None,
+            client_info: None,
+            prp_filter: Some(ServerPropertyFilters {
+                config_name: None,
+                ping_site_list: vec![
+                    "aws-bah".into(),
+                    "aws-bom".into(),
+                    "aws-hkg".into(),
+                    "aws-nrt".into(),
+                    "aws-sin".into(),
+                    "aws-iad".into(),
+                    "aws-pdx".into(),
+                    "aws-sjc".into(),
+                    "aws-brz".into(),
+                    "aws-cmh".into(),
+                    "aws-icn".into(),
+                    "aws-cdg".into(),
+                    "aws-dub".into(),
+                    "aws-fra".into(),
+                    "aws-lhr".into(),
+                    "aws-cpt".into(),
+                    "aws-syd".into(),
+                ],
+                query_name: None,
+            }),
+            limit: 100,
+        },
+    )
+    .await?;
+    if servers.servers.len() <= 0 {
+        anyhow::bail!("kingston: no servers on auth check");
+    }
+    sessions.insert("pc".into(), kingston_client.session_id);
+    Ok(sessions)
+}
+
 async fn region_players(
     pool: PgPool,
     kingston_client: KingstonClient,
@@ -323,10 +376,14 @@ pub async fn gather_grpc(
     mut sessions: HashMap<String, String>,
     cookie: bf_sparta::cookie::Cookie,
     run_detailed: bool,
+    ea_access_token: String,
 ) -> anyhow::Result<(HashMap<String, String>, results::RegionResult)> {
     let mut kingston_client =
         KingstonClient::new(sessions.get("pc").unwrap_or(&"".to_string()).to_string()).await?;
-    match kingston_client.auth(cookie.clone()).await {
+    match kingston_client
+        .ea_desktop_auth(cookie.clone(), ea_access_token)
+        .await
+    {
         Ok(_) => {}
         Err(e) => anyhow::bail!("kingston session failed: {:#?}", e),
     };
