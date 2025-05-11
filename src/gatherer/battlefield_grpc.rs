@@ -60,7 +60,7 @@ pub async fn check_session(
                 ],
                 query_name: None,
             }),
-            limit: 100,
+            limit: 10,
         },
     )
     .await?;
