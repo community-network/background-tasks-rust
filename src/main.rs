@@ -117,20 +117,33 @@ async fn main() -> anyhow::Result<()> {
         Ok(_) => cookie.clone(),
         Err(e) => {
             log::warn!("Cookie failed, {} - requesting new cookie", e);
-            let cookie_auth = cookie_request::request_cookie(cookie_request::Login {
+            match cookie_request::request_cookie(cookie_request::Login {
                 email: api_main_account.clone(),
                 pass: env::var("API_MAIN_ACCOUNT_PASSWORD")
                     .expect("API_MAIN_ACCOUNT_PASSWORD wasn't set"),
             })
-            .await?;
-            let cookie = bf_sparta::cookie::Cookie {
-                sid: cookie_auth.sid,
-                remid: cookie_auth.remid,
-            };
-            mongo_client
-                .push_new_cookies(&api_main_account, &cookie, "".to_string())
-                .await?;
-            cookie
+            .await
+            {
+                Ok(cookie_auth) => {
+                    let cookie = bf_sparta::cookie::Cookie {
+                        sid: cookie_auth.sid,
+                        remid: cookie_auth.remid,
+                    };
+                    mongo_client
+                        .push_new_cookies(&api_main_account, &cookie, "".to_string())
+                        .await?;
+                    cookie
+                }
+                Err(e) => {
+                    log::warn!(
+                        "Requesting new cookie failed, {} - using one from the manager",
+                        e
+                    );
+
+                    let cookie = mongo_client.get_random_cookie().await?;
+                    cookie
+                }
+            }
         }
     };
 

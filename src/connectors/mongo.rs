@@ -2,19 +2,55 @@ use std::env;
 
 use crate::structs::old_games;
 use bf_sparta::cookie::Cookie;
+use bf_sparta::sparta_api;
 use bson::Document;
 use chrono::{DateTime, Utc};
+use futures::StreamExt;
 use mongodb::error::Result;
+use mongodb::options::FindOptions;
 use mongodb::{options::ReplaceOptions, results::UpdateResult, Client, Collection};
 use serde::{Deserialize, Serialize};
 
 pub struct MongoClient {
     pub backend_cookies: Collection<BackendCookie>,
+    pub community_cookies: Collection<CommunityCookie>,
+    pub cookie_check: Collection<CookieCheck>,
     pub community_servers: Collection<Document>,
     pub community_groups: Collection<Document>,
     pub player_list: Collection<Document>,
     pub logging: Collection<Document>,
     pub old_games_servers: Collection<old_games::OldGameServerList>,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct CookieCheck {
+    pub _id: String,
+    pub prefix: String,
+    #[serde(rename = "personaId")]
+    pub persona_id: String,
+    #[serde(rename = "sessionId")]
+    pub session_id: String,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct CommunityCookie {
+    pub _id: String,
+    pub sid: String,
+    pub remid: String,
+    #[serde(rename = "personaId")]
+    pub persona_id: String,
+    pub username: String,
+    #[serde(rename = "supportedGames")]
+    pub supported_games: Vec<String>,
+}
+
+impl From<CommunityCookie> for Cookie {
+    fn from(cookie: CommunityCookie) -> Self {
+        Cookie {
+            remid: cookie.remid,
+            sid: cookie.sid,
+        }
+    }
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -71,6 +107,8 @@ impl MongoClient {
         let gamestats_db = client.database("gamestats");
 
         Ok(MongoClient {
+            cookie_check: db.collection("cookieCheck"),
+            community_cookies: db.collection("communityCookies"),
             backend_cookies: db.collection("backendCookies"),
             community_servers: db.collection("communityServers"),
             community_groups: db.collection("communityGroups"),
@@ -164,6 +202,56 @@ impl MongoClient {
             backend_cookie.clone().into(),
             backend_cookie.ea_access_token.unwrap_or_default(),
         ))
+    }
+
+    pub async fn get_random_cookie(&mut self) -> anyhow::Result<Cookie> {
+        let mut cookie_check = self
+            .cookie_check
+            .find(bson::doc! {})
+            .with_options(
+                FindOptions::builder()
+                    .sort(bson::doc! {"timeStamp": -1})
+                    .build(),
+            )
+            .await?;
+        let mut result_cookie = None;
+        while let Some(maybe_check) = cookie_check.next().await {
+            let check = maybe_check?;
+            match self
+                .community_cookies
+                .find_one(bson::doc! {"_id": check._id})
+                .await
+            {
+                Ok(e) => {
+                    if let Some(cookie) = e {
+                        match sparta_api::get_token(
+                            cookie.clone().into(),
+                            "pc",
+                            "tunguska",
+                            "en-us",
+                        )
+                        .await
+                        {
+                            Ok(_) => {
+                                result_cookie = Some(cookie);
+                                break;
+                            }
+                            Err(e) => {
+                                log::info!("Cookie not valid, trying another one - {}", e);
+                            }
+                        }
+                    } else {
+                        continue;
+                    }
+                }
+                Err(_) => continue,
+            };
+        }
+
+        Ok(match result_cookie {
+            Some(cookie) => cookie.into(),
+            None => anyhow::bail!("no cookie found"),
+        })
     }
 
     pub async fn gather_old_title(
