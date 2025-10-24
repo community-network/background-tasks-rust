@@ -51,6 +51,10 @@ branch = "main"
 git = "https://github.com/community-network/grpc-rust"
 branch = "main"
 
+[dependencies.grpc-rust-bf6]
+git = "https://github.com/community-network/grpc-rust-bf6"
+branch = "main"
+
 [dependencies.reqwest]
 version = "0.12"
 default-features = false

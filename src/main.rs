@@ -6,9 +6,8 @@ use crate::connectors::influx_db;
 use bf_sparta::{cookie_request, sparta_api};
 use connectors::mongo::MongoClient;
 use gatherer::{
-    battlebit,
-    battlefield_grpc::{self, check_session},
-    battlelog, companion, marne, old_games,
+    battlebit, battlefield_grpc_bf2042, battlefield_grpc_bf6, battlelog, companion, marne,
+    old_games,
 };
 use grpc_rust::access_token::ea_desktop_access_token;
 use influxdb2::Client;
@@ -270,7 +269,7 @@ async fn main() -> anyhow::Result<()> {
                 last_ran_detailed = chrono::Utc::now();
             }
 
-            match battlefield_grpc::gather_grpc(
+            match battlefield_grpc_bf2042::gather_grpc(
                 &pool,
                 &influx_client,
                 sessions
@@ -305,6 +304,41 @@ async fn main() -> anyhow::Result<()> {
                     failed_games.push("kingston");
                 }
             };
+            match battlefield_grpc_bf6::gather_grpc(
+                &pool,
+                &influx_client,
+                sessions
+                    .get("santiago")
+                    .unwrap_or(&empty_game_hash)
+                    .to_owned(),
+                bf2042_cookie.clone(),
+                run_detailed,
+                ea_access_token.clone(),
+            )
+            .await
+            {
+                Ok((session, game_result)) => {
+                    sessions.insert("santiago".to_string(), session);
+                    game_results.insert("santiago".to_string(), game_result);
+                }
+                Err(e) => {
+                    log::error!("Failed santiago_grpc, with reason: {:#?}", e);
+                    match ea_desktop_access_token(bf2042_cookie.clone()).await {
+                        Ok(res) => {
+                            (ea_access_token, bf2042_cookie) = res;
+                            mongo_client
+                                .push_new_cookies(
+                                    &api_bf2042_account,
+                                    &bf2042_cookie,
+                                    ea_access_token.clone(),
+                                )
+                                .await?;
+                        }
+                        Err(e) => log::error!("access_token for ea desktop failed: {:#?}", e),
+                    };
+                    failed_games.push("santiago");
+                }
+            };
             log::info!("grpc done");
             for game in vec!["bf1", "bfv"] {
                 match marne::push_marne(game, &pool, &influx_client).await {
@@ -320,7 +354,16 @@ async fn main() -> anyhow::Result<()> {
 
             // if no games failed, make global array
             if failed_games.iter().any(|&value| {
-                vec!["bf3", "bf4", "bfh", "tunguska", "casablanca", "kingston"].contains(&value)
+                vec![
+                    "bf3",
+                    "bf4",
+                    "bfh",
+                    "tunguska",
+                    "casablanca",
+                    "kingston",
+                    "santiago",
+                ]
+                .contains(&value)
             }) {
                 log::error!("1 of the important games failed to gather, skipping global array...");
             } else {
@@ -348,42 +391,42 @@ async fn main() -> anyhow::Result<()> {
                 atomic::Ordering::Relaxed,
             );
         } else {
-            let ten_mins = last_ran + chrono::Duration::minutes(10);
-            log::info!(
-                "Waiting {:#?} minutes before next run",
-                (ten_mins - last_ran).num_minutes()
-            );
-            match check_session(
-                sessions
-                    .get("kingston")
-                    .unwrap_or(&empty_game_hash)
-                    .to_owned(),
-                bf2042_cookie.clone(),
-                ea_access_token.clone(),
-            )
-            .await
-            {
-                Ok(session) => {
-                    sessions.insert("kingston".to_string(), session);
-                    log::info!("kingston: Finished auth check!");
-                }
-                Err(e) => {
-                    log::error!("Failed kingston_grpc, auth_check reason: {:#?}", e);
-                    match ea_desktop_access_token(bf2042_cookie.clone()).await {
-                        Ok(res) => {
-                            (ea_access_token, bf2042_cookie) = res;
-                            mongo_client
-                                .push_new_cookies(
-                                    &api_bf2042_account,
-                                    &bf2042_cookie,
-                                    ea_access_token.clone(),
-                                )
-                                .await?;
-                        }
-                        Err(e) => log::error!("access_token for ea desktop failed: {:#?}", e),
-                    };
-                }
-            };
+            // let ten_mins = last_ran + chrono::Duration::minutes(10);
+            // log::info!(
+            //     "Waiting {:#?} minutes before next run",
+            //     (ten_mins - last_ran).num_minutes()
+            // );
+            // match battlefield_grpc_bf2042::check_session(
+            //     sessions
+            //         .get("kingston")
+            //         .unwrap_or(&empty_game_hash)
+            //         .to_owned(),
+            //     bf2042_cookie.clone(),
+            //     ea_access_token.clone(),
+            // )
+            // .await
+            // {
+            //     Ok(session) => {
+            //         sessions.insert("kingston".to_string(), session);
+            //         log::info!("kingston: Finished auth check!");
+            //     }
+            //     Err(e) => {
+            //         log::error!("Failed kingston_grpc, auth_check reason: {:#?}", e);
+            //         match ea_desktop_access_token(bf2042_cookie.clone()).await {
+            //             Ok(res) => {
+            //                 (ea_access_token, bf2042_cookie) = res;
+            //                 mongo_client
+            //                     .push_new_cookies(
+            //                         &api_bf2042_account,
+            //                         &bf2042_cookie,
+            //                         ea_access_token.clone(),
+            //                     )
+            //                     .await?;
+            //             }
+            //             Err(e) => log::error!("access_token for ea desktop failed: {:#?}", e),
+            //         };
+            //     }
+            // };
             sleep(Duration::from_secs(30)).await;
         }
     }
