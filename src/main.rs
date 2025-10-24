@@ -391,42 +391,42 @@ async fn main() -> anyhow::Result<()> {
                 atomic::Ordering::Relaxed,
             );
         } else {
-            // let ten_mins = last_ran + chrono::Duration::minutes(10);
-            // log::info!(
-            //     "Waiting {:#?} minutes before next run",
-            //     (ten_mins - last_ran).num_minutes()
-            // );
-            // match battlefield_grpc_bf2042::check_session(
-            //     sessions
-            //         .get("kingston")
-            //         .unwrap_or(&empty_game_hash)
-            //         .to_owned(),
-            //     bf2042_cookie.clone(),
-            //     ea_access_token.clone(),
-            // )
-            // .await
-            // {
-            //     Ok(session) => {
-            //         sessions.insert("kingston".to_string(), session);
-            //         log::info!("kingston: Finished auth check!");
-            //     }
-            //     Err(e) => {
-            //         log::error!("Failed kingston_grpc, auth_check reason: {:#?}", e);
-            //         match ea_desktop_access_token(bf2042_cookie.clone()).await {
-            //             Ok(res) => {
-            //                 (ea_access_token, bf2042_cookie) = res;
-            //                 mongo_client
-            //                     .push_new_cookies(
-            //                         &api_bf2042_account,
-            //                         &bf2042_cookie,
-            //                         ea_access_token.clone(),
-            //                     )
-            //                     .await?;
-            //             }
-            //             Err(e) => log::error!("access_token for ea desktop failed: {:#?}", e),
-            //         };
-            //     }
-            // };
+            let ten_mins = last_ran + chrono::Duration::minutes(10);
+            log::info!(
+                "Waiting {:#?} minutes before next run",
+                (ten_mins - last_ran).num_minutes()
+            );
+            match battlefield_grpc_bf2042::check_session(
+                sessions
+                    .get("kingston")
+                    .unwrap_or(&empty_game_hash)
+                    .to_owned(),
+                bf2042_cookie.clone(),
+                ea_access_token.clone(),
+            )
+            .await
+            {
+                Ok(session) => {
+                    sessions.insert("kingston".to_string(), session);
+                    log::info!("kingston: Finished auth check!");
+                }
+                Err(e) => {
+                    log::error!("Failed kingston_grpc, auth_check reason: {:#?}", e);
+                    match ea_desktop_access_token(bf2042_cookie.clone()).await {
+                        Ok(res) => {
+                            (ea_access_token, bf2042_cookie) = res;
+                            mongo_client
+                                .push_new_cookies(
+                                    &api_bf2042_account,
+                                    &bf2042_cookie,
+                                    ea_access_token.clone(),
+                                )
+                                .await?;
+                        }
+                        Err(e) => log::error!("access_token for ea desktop failed: {:#?}", e),
+                    };
+                }
+            };
             sleep(Duration::from_secs(30)).await;
         }
     }
