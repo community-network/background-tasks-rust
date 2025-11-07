@@ -1,3 +1,4 @@
+mod check_ea_desktop_session;
 mod connectors;
 mod gatherer;
 mod structs;
