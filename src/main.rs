@@ -392,6 +392,52 @@ async fn main() -> anyhow::Result<()> {
                 atomic::Ordering::Relaxed,
             );
         } else {
+            // rotating ea desktop token
+            for i in 6..11 {
+                let (mut ea_cookie, mut list_ea_access_token, valid) = match mongo_client
+                    .get_cookies_by_id(&format!("desktop-api{}", i))
+                    .await
+                {
+                    Ok(result) => result,
+                    Err(e) => {
+                        log::warn!("Cookie failed, {}", e);
+                        (
+                            bf_sparta::cookie::Cookie {
+                                sid: "".to_string(),
+                                remid: "".to_string(),
+                            },
+                            "".to_string(),
+                            false,
+                        )
+                    }
+                };
+                if valid {
+                    match check_ea_desktop_session::get_session_info(list_ea_access_token).await {
+                        Ok(_) => {
+                            log::info!("ea desktop {}: Finished auth check!", i);
+                        }
+                        Err(e) => {
+                            log::error!("Failed kingston_grpc, auth_check reason: {:#?}", e);
+                            match ea_desktop_access_token(ea_cookie.clone()).await {
+                                Ok(res) => {
+                                    (list_ea_access_token, ea_cookie) = res;
+                                    mongo_client
+                                        .push_new_cookies(
+                                            &format!("desktop-api{}", i),
+                                            &ea_cookie,
+                                            list_ea_access_token.clone(),
+                                        )
+                                        .await?;
+                                }
+                                Err(e) => {
+                                    log::error!("access_token for ea desktop failed: {:#?}", e)
+                                }
+                            };
+                        }
+                    };
+                }
+            }
+
             let ten_mins = last_ran + chrono::Duration::minutes(10);
             log::info!(
                 "Waiting {:#?} minutes before next run",

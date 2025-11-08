@@ -59,6 +59,7 @@ pub struct BackendCookie {
     pub sid: String,
     pub remid: String,
     pub ea_access_token: Option<String>,
+    pub valid: Option<bool>,
 }
 
 impl From<BackendCookie> for Cookie {
@@ -185,6 +186,7 @@ impl MongoClient {
             sid: cookie.sid.clone(),
             remid: cookie.remid.clone(),
             ea_access_token: Some(ea_access_token.clone()),
+            valid: Some(true),
         };
         let options = ReplaceOptions::builder().upsert(true).build();
         self.backend_cookies
@@ -201,6 +203,22 @@ impl MongoClient {
         Ok((
             backend_cookie.clone().into(),
             backend_cookie.ea_access_token.unwrap_or_default(),
+        ))
+    }
+
+    pub async fn get_cookies_by_id(&mut self, id: &str) -> anyhow::Result<(Cookie, String, bool)> {
+        let backend_cookie = match self
+            .backend_cookies
+            .find_one(bson::doc! {"_id": id})
+            .await?
+        {
+            Some(result) => result,
+            None => anyhow::bail!("no cookie"),
+        };
+        Ok((
+            backend_cookie.clone().into(),
+            backend_cookie.ea_access_token.unwrap_or_default(),
+            backend_cookie.valid.unwrap_or_default(),
         ))
     }
 
