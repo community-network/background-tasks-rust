@@ -195,6 +195,27 @@ impl MongoClient {
             .await
     }
 
+    pub async fn push_new_id_cookies(
+        &mut self,
+        id: &str,
+        cookie: &Cookie,
+        ea_access_token: String,
+        valid: bool,
+    ) -> Result<UpdateResult> {
+        let cookie = BackendCookie {
+            _id: id.to_string(),
+            sid: cookie.sid.clone(),
+            remid: cookie.remid.clone(),
+            ea_access_token: Some(ea_access_token.clone()),
+            valid: Some(valid),
+        };
+        let options = ReplaceOptions::builder().upsert(true).build();
+        self.backend_cookies
+            .replace_one(bson::doc! {"_id": id}, cookie)
+            .with_options(options)
+            .await
+    }
+
     pub async fn get_cookies(&mut self, acc_email: &str) -> anyhow::Result<(Cookie, String)> {
         let backend_cookie = match self.backend_cookies.find_one(bson::doc! {"_id": format!("main-{}", acc_email.split('@').collect::<Vec<&str>>()[0])}).await? {
             Some(result) => result,
