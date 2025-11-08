@@ -160,237 +160,237 @@ async fn main() -> anyhow::Result<()> {
             log::info!("Starting new run");
             last_ran = chrono::Utc::now();
 
-            // match mongo_client.gather_managerinfo().await {
-            //     Ok(result) => {
-            //         match gatherer::server_manager::save_server_manager_info(&influx_client, result)
-            //             .await
-            //         {
-            //             Ok(_) => {}
-            //             Err(e) => {
-            //                 log::error!("Failed to send new manager info to influxdb {:#?}", e)
-            //             }
-            //         };
-            //     }
-            //     Err(e) => log::error!("Failed to send new manager info {:#?}", e),
-            // };
-            // log::info!("manager done");
+            match mongo_client.gather_managerinfo().await {
+                Ok(result) => {
+                    match gatherer::server_manager::save_server_manager_info(&influx_client, result)
+                        .await
+                    {
+                        Ok(_) => {}
+                        Err(e) => {
+                            log::error!("Failed to send new manager info to influxdb {:#?}", e)
+                        }
+                    };
+                }
+                Err(e) => log::error!("Failed to send new manager info {:#?}", e),
+            };
+            log::info!("manager done");
 
-            // let mut game_results: HashMap<String, results::RegionResult> = HashMap::new();
-            // let mut failed_games: Vec<&str> = vec![];
+            let mut game_results: HashMap<String, results::RegionResult> = HashMap::new();
+            let mut failed_games: Vec<&str> = vec![];
 
-            // let old_games = HashMap::from([
-            //     ("bf2-playbf2", "playbf2"),
-            //     ("bf2-bf2hub", "bf2hub"),
-            //     ("bfield1942-bf1942org", "bfield1942"),
-            //     ("bf2142-openspy", "bf2142"),
-            //     ("bf2142-play2142", "play2142"),
-            //     // ("bfbc2", "bfbc2"),
-            //     ("bfvietnam-qtracker", "bfvietnam"),
-            //     ("bfvietnam-openspy", "openspy"),
-            // ]);
-            // for (key, value) in old_games.into_iter() {
-            //     match old_games::push_old_games(
-            //         &pool,
-            //         &influx_client,
-            //         &mut mongo_client,
-            //         key,
-            //         value,
-            //     )
-            //     .await
-            //     {
-            //         Ok(game_result) => {
-            //             game_results.insert(key.to_string(), game_result);
-            //         }
-            //         Err(e) => {
-            //             log::error!("Failed oldgame: {}, with reason: {:#?}", key, e);
-            //             failed_games.push(key);
-            //         }
-            //     };
-            // }
-            // log::info!("oldgames done");
+            let old_games = HashMap::from([
+                ("bf2-playbf2", "playbf2"),
+                ("bf2-bf2hub", "bf2hub"),
+                ("bfield1942-bf1942org", "bfield1942"),
+                ("bf2142-openspy", "bf2142"),
+                ("bf2142-play2142", "play2142"),
+                // ("bfbc2", "bfbc2"),
+                ("bfvietnam-qtracker", "bfvietnam"),
+                ("bfvietnam-openspy", "openspy"),
+            ]);
+            for (key, value) in old_games.into_iter() {
+                match old_games::push_old_games(
+                    &pool,
+                    &influx_client,
+                    &mut mongo_client,
+                    key,
+                    value,
+                )
+                .await
+                {
+                    Ok(game_result) => {
+                        game_results.insert(key.to_string(), game_result);
+                    }
+                    Err(e) => {
+                        log::error!("Failed oldgame: {}, with reason: {:#?}", key, e);
+                        failed_games.push(key);
+                    }
+                };
+            }
+            log::info!("oldgames done");
 
-            // let sparta_games =
-            //     HashMap::from([("tunguska", "bf1"), ("casablanca", "bfv"), ("bf4", "bf4")]);
-            // for (key, value) in sparta_games.into_iter() {
-            //     match companion::gather_companion(
-            //         &pool,
-            //         &influx_client,
-            //         sessions.get(key).unwrap_or(&empty_game_hash).to_owned(),
-            //         cookie.clone(),
-            //         key,
-            //         value,
-            //     )
-            //     .await
-            //     {
-            //         Ok((session, platform_result)) => {
-            //             sessions.insert(key.to_string(), session);
-            //             game_results.insert(key.to_string(), platform_result);
-            //         }
-            //         Err(e) => {
-            //             log::error!("Failed sparta_game: {}, with reason: {:#?}", key, e);
-            //             failed_games.push(key);
-            //         }
-            //     };
-            // }
-            // log::info!("sparta done");
+            let sparta_games =
+                HashMap::from([("tunguska", "bf1"), ("casablanca", "bfv"), ("bf4", "bf4")]);
+            for (key, value) in sparta_games.into_iter() {
+                match companion::gather_companion(
+                    &pool,
+                    &influx_client,
+                    sessions.get(key).unwrap_or(&empty_game_hash).to_owned(),
+                    cookie.clone(),
+                    key,
+                    value,
+                )
+                .await
+                {
+                    Ok((session, platform_result)) => {
+                        sessions.insert(key.to_string(), session);
+                        game_results.insert(key.to_string(), platform_result);
+                    }
+                    Err(e) => {
+                        log::error!("Failed sparta_game: {}, with reason: {:#?}", key, e);
+                        failed_games.push(key);
+                    }
+                };
+            }
+            log::info!("sparta done");
 
-            // // pc only!
-            // let battlelog_games = HashMap::from([
-            //     (
-            //         "bf3",
-            //         "https://battlelog.battlefield.com/bf3/servers/getAutoBrowseServers/",
-            //     ),
-            //     (
-            //         "bf4",
-            //         "https://battlelog.battlefield.com/bf4/servers/getServers/pc/",
-            //     ),
-            //     (
-            //         "bfh",
-            //         "https://battlelog.battlefield.com/bfh/servers/getServers/pc/",
-            //     ),
-            // ]);
-            // for (key, value) in battlelog_games {
-            //     match battlelog::gather_battlelog(&pool, &influx_client, key, value).await {
-            //         Ok(game_result) => {
-            //             game_results.insert(key.to_string(), game_result);
-            //         }
-            //         Err(e) => {
-            //             log::error!("Failed battlelog_game: {}, with reason: {:#?}", key, e);
-            //             failed_games.push(key);
-            //         }
-            //     };
-            // }
-            // log::info!("battlelog done");
+            // pc only!
+            let battlelog_games = HashMap::from([
+                (
+                    "bf3",
+                    "https://battlelog.battlefield.com/bf3/servers/getAutoBrowseServers/",
+                ),
+                (
+                    "bf4",
+                    "https://battlelog.battlefield.com/bf4/servers/getServers/pc/",
+                ),
+                (
+                    "bfh",
+                    "https://battlelog.battlefield.com/bfh/servers/getServers/pc/",
+                ),
+            ]);
+            for (key, value) in battlelog_games {
+                match battlelog::gather_battlelog(&pool, &influx_client, key, value).await {
+                    Ok(game_result) => {
+                        game_results.insert(key.to_string(), game_result);
+                    }
+                    Err(e) => {
+                        log::error!("Failed battlelog_game: {}, with reason: {:#?}", key, e);
+                        failed_games.push(key);
+                    }
+                };
+            }
+            log::info!("battlelog done");
 
-            // let run_detailed = last_ran_detailed
-            //     .add(chrono::Duration::hours(hours_between_detailed_runs))
-            //     <= chrono::Utc::now();
-            // if run_detailed {
-            //     log::info!("Running grpc detailed");
-            //     last_ran_detailed = chrono::Utc::now();
-            // }
+            let run_detailed = last_ran_detailed
+                .add(chrono::Duration::hours(hours_between_detailed_runs))
+                <= chrono::Utc::now();
+            if run_detailed {
+                log::info!("Running grpc detailed");
+                last_ran_detailed = chrono::Utc::now();
+            }
 
-            // match battlefield_grpc_bf2042::gather_grpc(
-            //     &pool,
-            //     &influx_client,
-            //     sessions
-            //         .get("kingston")
-            //         .unwrap_or(&empty_game_hash)
-            //         .to_owned(),
-            //     bf2042_cookie.clone(),
-            //     run_detailed,
-            //     ea_access_token.clone(),
-            // )
-            // .await
-            // {
-            //     Ok((session, game_result)) => {
-            //         sessions.insert("kingston".to_string(), session);
-            //         game_results.insert("kingston".to_string(), game_result);
-            //     }
-            //     Err(e) => {
-            //         log::error!("Failed kingston_grpc, with reason: {:#?}", e);
-            //         match ea_desktop_access_token(bf2042_cookie.clone()).await {
-            //             Ok(res) => {
-            //                 (ea_access_token, bf2042_cookie) = res;
-            //                 mongo_client
-            //                     .push_new_cookies(
-            //                         &api_bf2042_account,
-            //                         &bf2042_cookie,
-            //                         ea_access_token.clone(),
-            //                     )
-            //                     .await?;
-            //             }
-            //             Err(e) => log::error!("access_token for ea desktop failed: {:#?}", e),
-            //         };
-            //         failed_games.push("kingston");
-            //     }
-            // };
-            // match battlefield_grpc_bf6::gather_grpc(
-            //     &pool,
-            //     &influx_client,
-            //     sessions
-            //         .get("santiago")
-            //         .unwrap_or(&empty_game_hash)
-            //         .to_owned(),
-            //     bf2042_cookie.clone(),
-            //     run_detailed,
-            //     ea_access_token.clone(),
-            // )
-            // .await
-            // {
-            //     Ok((session, game_result)) => {
-            //         sessions.insert("santiago".to_string(), session);
-            //         game_results.insert("santiago".to_string(), game_result);
-            //     }
-            //     Err(e) => {
-            //         log::error!("Failed santiago_grpc, with reason: {:#?}", e);
-            //         match ea_desktop_access_token(bf2042_cookie.clone()).await {
-            //             Ok(res) => {
-            //                 (ea_access_token, bf2042_cookie) = res;
-            //                 mongo_client
-            //                     .push_new_cookies(
-            //                         &api_bf2042_account,
-            //                         &bf2042_cookie,
-            //                         ea_access_token.clone(),
-            //                     )
-            //                     .await?;
-            //             }
-            //             Err(e) => log::error!("access_token for ea desktop failed: {:#?}", e),
-            //         };
-            //         failed_games.push("santiago");
-            //     }
-            // };
-            // log::info!("grpc done");
-            // for game in vec!["bf1", "bfv"] {
-            //     match marne::push_marne(game, &pool, &influx_client).await {
-            //         Ok(game_result) => {
-            //             game_results.insert(format!("{}_marne", game), game_result);
-            //         }
-            //         Err(e) => {
-            //             log::error!("{} Marne failed with reason: {:#?}", game, e);
-            //         }
-            //     };
-            // }
-            // log::info!("Marne done");
+            match battlefield_grpc_bf2042::gather_grpc(
+                &pool,
+                &influx_client,
+                sessions
+                    .get("kingston")
+                    .unwrap_or(&empty_game_hash)
+                    .to_owned(),
+                bf2042_cookie.clone(),
+                run_detailed,
+                ea_access_token.clone(),
+            )
+            .await
+            {
+                Ok((session, game_result)) => {
+                    sessions.insert("kingston".to_string(), session);
+                    game_results.insert("kingston".to_string(), game_result);
+                }
+                Err(e) => {
+                    log::error!("Failed kingston_grpc, with reason: {:#?}", e);
+                    match ea_desktop_access_token(bf2042_cookie.clone()).await {
+                        Ok(res) => {
+                            (ea_access_token, bf2042_cookie) = res;
+                            mongo_client
+                                .push_new_cookies(
+                                    &api_bf2042_account,
+                                    &bf2042_cookie,
+                                    ea_access_token.clone(),
+                                )
+                                .await?;
+                        }
+                        Err(e) => log::error!("access_token for ea desktop failed: {:#?}", e),
+                    };
+                    failed_games.push("kingston");
+                }
+            };
+            match battlefield_grpc_bf6::gather_grpc(
+                &pool,
+                &influx_client,
+                sessions
+                    .get("santiago")
+                    .unwrap_or(&empty_game_hash)
+                    .to_owned(),
+                bf2042_cookie.clone(),
+                run_detailed,
+                ea_access_token.clone(),
+            )
+            .await
+            {
+                Ok((session, game_result)) => {
+                    sessions.insert("santiago".to_string(), session);
+                    game_results.insert("santiago".to_string(), game_result);
+                }
+                Err(e) => {
+                    log::error!("Failed santiago_grpc, with reason: {:#?}", e);
+                    match ea_desktop_access_token(bf2042_cookie.clone()).await {
+                        Ok(res) => {
+                            (ea_access_token, bf2042_cookie) = res;
+                            mongo_client
+                                .push_new_cookies(
+                                    &api_bf2042_account,
+                                    &bf2042_cookie,
+                                    ea_access_token.clone(),
+                                )
+                                .await?;
+                        }
+                        Err(e) => log::error!("access_token for ea desktop failed: {:#?}", e),
+                    };
+                    failed_games.push("santiago");
+                }
+            };
+            log::info!("grpc done");
+            for game in vec!["bf1", "bfv"] {
+                match marne::push_marne(game, &pool, &influx_client).await {
+                    Ok(game_result) => {
+                        game_results.insert(format!("{}_marne", game), game_result);
+                    }
+                    Err(e) => {
+                        log::error!("{} Marne failed with reason: {:#?}", game, e);
+                    }
+                };
+            }
+            log::info!("Marne done");
 
-            // // if no games failed, make global array
-            // if failed_games.iter().any(|&value| {
-            //     vec![
-            //         "bf3",
-            //         "bf4",
-            //         "bfh",
-            //         "tunguska",
-            //         "casablanca",
-            //         "kingston",
-            //         "santiago",
-            //     ]
-            //     .contains(&value)
-            // }) {
-            //     log::error!("1 of the important games failed to gather, skipping global array...");
-            // } else {
-            //     let global_result =
-            //         results::combine_region_players("global", "global", &game_results).await;
+            // if no games failed, make global array
+            if failed_games.iter().any(|&value| {
+                vec![
+                    "bf3",
+                    "bf4",
+                    "bfh",
+                    "tunguska",
+                    "casablanca",
+                    "kingston",
+                    "santiago",
+                ]
+                .contains(&value)
+            }) {
+                log::error!("1 of the important games failed to gather, skipping global array...");
+            } else {
+                let global_result =
+                    results::combine_region_players("global", "global", &game_results).await;
 
-            //     // influx
-            //     match influx_db::push_totals(&influx_client, &global_result).await {
-            //         Ok(_) => log::info!("successfully made global array"),
-            //         Err(e) => log::error!("Failed to push global games array: {:#?}", e),
-            //     };
-            // }
-            // log::info!("global done");
+                // influx
+                match influx_db::push_totals(&influx_client, &global_result).await {
+                    Ok(_) => log::info!("successfully made global array"),
+                    Err(e) => log::error!("Failed to push global games array: {:#?}", e),
+                };
+            }
+            log::info!("global done");
 
-            // match battlebit::push_battlebit(&pool, &influx_client).await {
-            //     Ok(_) => {}
-            //     Err(e) => {
-            //         log::error!("Battlebit failed with reason: {:#?}", e);
-            //     }
-            // };
-            // log::info!("Battlebit done");
+            match battlebit::push_battlebit(&pool, &influx_client).await {
+                Ok(_) => {}
+                Err(e) => {
+                    log::error!("Battlebit failed with reason: {:#?}", e);
+                }
+            };
+            log::info!("Battlebit done");
 
-            // last_update.store(
-            //     chrono::Utc::now().timestamp() / 60,
-            //     atomic::Ordering::Relaxed,
-            // );
+            last_update.store(
+                chrono::Utc::now().timestamp() / 60,
+                atomic::Ordering::Relaxed,
+            );
         } else {
             // rotating ea desktop token
             for i in 6..11 {
