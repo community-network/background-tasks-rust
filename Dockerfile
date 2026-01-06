@@ -33,5 +33,7 @@ HEALTHCHECK --interval=5m --timeout=3s --start-period=5s \
 # RUN ldconfig
 COPY server.pem .
 COPY --from=builder /usr/local/cargo/bin/background-tasks-rust /usr/local/bin/background-tasks-rust
-RUN apt-get update && apt-get upgrade -y && apt-get install --assume-yes curl protobuf-compiler libprotobuf-dev && apt-get clean
+RUN apt-get update && apt-get upgrade -y \
+&& apt-get install --assume-yes curl protobuf-compiler libprotobuf-dev \
+&& apt-get clean
 CMD background-tasks-rust

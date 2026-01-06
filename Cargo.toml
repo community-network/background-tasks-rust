@@ -2,6 +2,7 @@
 name = "background-tasks-rust"
 version = "0.1.0"
 edition = "2021"
+default-run = "background-tasks-rust"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
@@ -62,3 +63,11 @@ features = ["rustls-tls", "json"]
 
 [profile.dev.package.sqlx-macros]
 opt-level = 3
+
+[[bin]]
+name = "background-tasks-rust"
+path = "src/main.rs"
+
+[[bin]]
+name = "ea_desktop_session"
+path = "src/ea_desktop_session.rs"
