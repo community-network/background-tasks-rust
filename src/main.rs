@@ -393,66 +393,66 @@ async fn main() -> anyhow::Result<()> {
             );
         } else {
             // rotating ea desktop token
-            for i in 6..11 {
-                let id = &format!("desktop-api{}", i);
-                let (mut ea_cookie, mut list_ea_access_token, cookie_valid) =
-                    match mongo_client.get_cookies_by_id(id).await {
-                        Ok(result) => result,
-                        Err(e) => {
-                            log::warn!("Cookie failed, {}", e);
-                            (
-                                bf_sparta::cookie::Cookie {
-                                    sid: "".to_string(),
-                                    remid: "".to_string(),
-                                },
-                                "".to_string(),
-                                false,
-                            )
-                        }
-                    };
-                if cookie_valid {
-                    let access_token_valid = match check_ea_desktop_session::get_session_info(
-                        list_ea_access_token.clone(),
-                    )
-                    .await
-                    {
-                        Ok(valid) => valid,
-                        Err(e) => {
-                            log::error!("Failed ea desktop, auth_check reason: {:#?}", e);
-                            false
-                        }
-                    };
-                    if access_token_valid {
-                        log::info!("ea desktop {}: Finished auth check!", i);
-                    } else {
-                        log::error!("getting new access token for ea desktop");
-                        match ea_desktop_access_token(ea_cookie.clone()).await {
-                            Ok(res) => {
-                                (list_ea_access_token, ea_cookie) = res;
-                                mongo_client
-                                    .push_new_id_cookies(
-                                        id,
-                                        &ea_cookie,
-                                        list_ea_access_token.clone(),
-                                        true,
-                                    )
-                                    .await?;
-                            }
-                            Err(e) => {
-                                log::error!("access_token for ea desktop failed: {:#?}", e);
-                                mongo_client
-                                    .push_new_id_cookies(
-                                        id,
-                                        &ea_cookie,
-                                        list_ea_access_token.clone(),
-                                        false,
-                                    )
-                                    .await?;
-                            }
-                        };
-                    }
-                }
-            }
+            // for i in 6..11 {
+            //     let id = &format!("desktop-api{}", i);
+            //     let (mut ea_cookie, mut list_ea_access_token, cookie_valid) =
+            //         match mongo_client.get_cookies_by_id(id).await {
+            //             Ok(result) => result,
+            //             Err(e) => {
+            //                 log::warn!("Cookie failed, {}", e);
+            //                 (
+            //                     bf_sparta::cookie::Cookie {
+            //                         sid: "".to_string(),
+            //                         remid: "".to_string(),
+            //                     },
+            //                     "".to_string(),
+            //                     false,
+            //                 )
+            //             }
+            //         };
+            //     if cookie_valid {
+            //         let access_token_valid = match check_ea_desktop_session::get_session_info(
+            //             list_ea_access_token.clone(),
+            //         )
+            //         .await
+            //         {
+            //             Ok(valid) => valid,
+            //             Err(e) => {
+            //                 log::error!("Failed ea desktop, auth_check reason: {:#?}", e);
+            //                 false
+            //             }
+            //         };
+            //         if access_token_valid {
+            //             log::info!("ea desktop {}: Finished auth check!", i);
+            //         } else {
+            //             log::error!("getting new access token for ea desktop");
+            //             match ea_desktop_access_token(ea_cookie.clone()).await {
+            //                 Ok(res) => {
+            //                     (list_ea_access_token, ea_cookie) = res;
+            //                     mongo_client
+            //                         .push_new_id_cookies(
+            //                             id,
+            //                             &ea_cookie,
+            //                             list_ea_access_token.clone(),
+            //                             true,
+            //                         )
+            //                         .await?;
+            //                 }
+            //                 Err(e) => {
+            //                     log::error!("access_token for ea desktop failed: {:#?}", e);
+            //                     mongo_client
+            //                         .push_new_id_cookies(
+            //                             id,
+            //                             &ea_cookie,
+            //                             list_ea_access_token.clone(),
+            //                             false,
+            //                         )
+            //                         .await?;
+            //                 }
+            //             };
+            //         }
+            //     }
+            // }
 
             let ten_mins = last_ran + chrono::Duration::minutes(10);
             log::info!(
