@@ -12,7 +12,7 @@ use gatherer::{
 };
 use grpc_rust::access_token::ea_desktop_access_token;
 use influxdb2::Client;
-use sqlx::postgres::PgPool;
+use sqlx::postgres::PgPoolOptions;
 use std::{
     collections::HashMap,
     env,
@@ -67,7 +67,10 @@ async fn main() -> anyhow::Result<()> {
     );
     let mut mongo_client = MongoClient::connect().await?;
 
-    let pool = PgPool::connect(&env::var("DATABASE_URL").expect("DATABASE_URL wasn't set")).await?;
+    let pool = PgPoolOptions::new()
+        .test_before_acquire(false)
+        .connect(&env::var("DATABASE_URL").expect("DATABASE_URL wasn't set"))
+        .await?;
 
     let api_main_account = env::var("API_MAIN_ACCOUNT").expect("API_MAIN_ACCOUNT wasn't set");
     let api_bf2042_account = env::var("API_BF2042_ACCOUNT").expect("API_BF2042_ACCOUNT wasn't set");
